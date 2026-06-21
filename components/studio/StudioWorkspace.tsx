@@ -112,6 +112,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
 
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
+  const [autoTopicLoading, setAutoTopicLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedNote, setSavedNote] = useState<string | null>(null);
   const [savedList, setSavedList] = useState<SavedDrama[]>([]);
@@ -177,6 +178,42 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     else setSavedList([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, colName]);
+
+  // Auto-write the "หัวข้อ/แนวคิด" using the title (and product, in sales mode).
+  const autoTopic = async () => {
+    if (!hasKey) {
+      setGenError('ยังไม่ได้ตั้งค่า API Key — ไปที่หน้าตั้งค่าก่อน');
+      return;
+    }
+    setAutoTopicLoading(true);
+    setGenError(null);
+    try {
+      const title = form.title.trim();
+      const kind = isSales
+        ? 'คลิปขายของแนวตั้ง (ละครสั้นที่ปิดการขายอย่างเป็นธรรมชาติ)'
+        : 'ละครสั้นแนวตั้ง';
+      const productLine =
+        isSales && (form.productName.trim() || form.productDetail.trim())
+          ? `สินค้าที่ต้องนำเสนอ/ขาย: ${form.productName.trim()} ${form.productDetail.trim()}`.trim()
+          : '';
+      const prompt = [
+        `ช่วยคิด "หัวข้อ/แนวคิด" สำหรับ${kind} ความยาว 3-5 ประโยค เป็นภาษาไทย`,
+        title ? `อ้างอิงจากชื่อเรื่อง: "${title}" (ให้สอดคล้องกับชื่อนี้)` : '',
+        productLine,
+        'ระบุ: ตัวละครหลัก (ผู้ใหญ่), อารมณ์/โทน, จุดพลิกของเรื่อง และฉากจบสั้นๆ',
+        isSales ? 'ร้อยเรื่องให้นำไปสู่การขายสินค้าได้เนียน' : '',
+        'ตอบกลับเฉพาะเนื้อหาหัวข้อ/แนวคิด — ไม่ต้องมีคำนำ ไม่ต้องมีหัวข้อกำกับ ไม่ต้องใส่เครื่องหมายคำพูด',
+      ]
+        .filter(Boolean)
+        .join('\n');
+      const text = await callAI({ prompt }, settings);
+      setForm((f) => ({ ...f, topic: text.trim() }));
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : 'ให้ AI คิดหัวข้อไม่สำเร็จ');
+    } finally {
+      setAutoTopicLoading(false);
+    }
+  };
 
   const onGenerate = async () => {
     if (!hasKey) {
@@ -375,6 +412,8 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
         onGenerate={onGenerate}
         generating={generating}
         hasKey={hasKey}
+        onAutoTopic={autoTopic}
+        autoTopicLoading={autoTopicLoading}
         salesMode={isSales}
         characters={characters.map((c) => ({ id: c.id, name: c.name, style: c.style }))}
         selectedIds={selectedCharacterIds}

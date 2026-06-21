@@ -22,6 +22,9 @@ type Props = {
   generating: boolean;
   /** Whether an AI key is configured (gates the generate button + shows notice). */
   hasKey: boolean;
+  /** Ask the AI to draft the topic/concept (from the title). */
+  onAutoTopic: () => void;
+  autoTopicLoading: boolean;
   /** Sales mode shows product + selling-style + cast; drama mode hides them. */
   salesMode: boolean;
   /** Reusable characters to pick from (from /characters). */
@@ -79,6 +82,8 @@ export function StoryForm({
   onGenerate,
   generating,
   hasKey,
+  onAutoTopic,
+  autoTopicLoading,
   salesMode,
   characters,
   selectedIds,
@@ -117,9 +122,29 @@ export function StoryForm({
         </div>
 
         <div>
-          <label htmlFor="drama-topic" className="mb-1.5 block text-sm font-medium text-slate-700">
-            หัวข้อ / แนวคิด <span className="text-rose-500">*</span>
-          </label>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label htmlFor="drama-topic" className="block text-sm font-medium text-slate-700">
+              หัวข้อ / แนวคิด <span className="text-rose-500">*</span>
+            </label>
+            <button
+              type="button"
+              onClick={onAutoTopic}
+              disabled={!hasKey || autoTopicLoading}
+              title={!hasKey ? 'ตั้งค่า API Key ก่อน' : 'ให้ AI คิดหัวข้อจากชื่อเรื่อง'}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-violet-50 px-2.5 py-1 text-xs font-semibold text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50"
+            >
+              {autoTopicLoading ? (
+                <>
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-300 border-t-violet-600" />
+                  กำลังคิด…
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-3.5 w-3.5" /> ให้ AI คิดให้
+                </>
+              )}
+            </button>
+          </div>
           <textarea
             id="drama-topic"
             rows={4}
