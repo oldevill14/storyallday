@@ -63,7 +63,7 @@ function CopyBtn({ text, label }: { text: string; label: string }) {
       title={`คัดลอก${label}`}
     >
       {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-      {copied ? 'คัดลอกแล้ว' : 'คัดลอก'}
+      {copied ? 'คัดลอกแล้ว' : `คัดลอก ${label}`}
     </button>
   );
 }
@@ -258,6 +258,11 @@ export function SceneCard({
             >
               สร้างวิดีโอ
             </Button>
+
+            {/* Copy the prompts for manual generation elsewhere */}
+            <span className="mx-0.5 h-5 w-px self-center bg-slate-200" />
+            <CopyBtn text={scene.visualPrompt} label="prompt ภาพ" />
+            <CopyBtn text={scene.videoPrompt} label="prompt วิดีโอ" />
           </div>
           {!media.imageDataUrl && (
             <p className="text-[11px] text-slate-400">
