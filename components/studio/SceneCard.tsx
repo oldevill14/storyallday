@@ -24,6 +24,8 @@ type Props = {
   sceneIndex: number;
   scene: Scene;
   aspectRatio: '9:16' | '16:9';
+  /** Whether a character/product reference image is available for this clip. */
+  hasRefs: boolean;
   media: SceneMedia;
   onSceneChange: (patch: Partial<Scene>) => void;
   onMediaChange: (patch: Partial<SceneMedia>) => void;
@@ -79,6 +81,7 @@ export function SceneCard({
   sceneIndex,
   scene,
   aspectRatio,
+  hasRefs,
   media,
   onSceneChange,
   onMediaChange,
@@ -236,6 +239,27 @@ export function SceneCard({
                   })}
                 </div>
               </div>
+
+              {hasRefs && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => onMediaChange({ lockRef: !(media.lockRef ?? true) })}
+                  title={
+                    (media.lockRef ?? true)
+                      ? 'ล็อกหน้าตัวละคร/สินค้าจากรูป ref (image-to-image · ช้ากว่า ~1-3 นาที)'
+                      : 'ไม่ล็อก — text-to-image เร็วกว่า'
+                  }
+                  className={
+                    'inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ' +
+                    ((media.lockRef ?? true)
+                      ? 'bg-violet-100 text-violet-700'
+                      : 'bg-slate-100 text-slate-500 hover:text-slate-700')
+                  }
+                >
+                  {(media.lockRef ?? true) ? '🔒 ล็อกหน้า' : '🔓 ไม่ล็อก'}
+                </button>
+              )}
 
               <Button
                 size="sm"

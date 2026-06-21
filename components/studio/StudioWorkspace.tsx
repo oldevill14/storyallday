@@ -281,17 +281,21 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
 
   const genImage = async (key: string, scene: Scene) => {
     const provider = media[key]?.imageProvider ?? 'grok';
-    // Send the character image + product image so both appear in one frame.
+    // Lock face/product via image-to-image only when the per-scene toggle is on
+    // (default) AND references exist; otherwise fast text-to-image.
+    const lockRef = media[key]?.lockRef ?? true;
     const charRef = charRefImage();
     const prodRef = isSales ? form.productImage : undefined;
-    const refs = [charRef, prodRef].filter(Boolean) as string[];
+    const allRefs = [charRef, prodRef].filter(Boolean) as string[];
+    const useRefs = lockRef && allRefs.length > 0;
+    const refs = useRefs ? allRefs : [];
     let refNote = '';
-    if (charRef && prodRef) {
+    if (useRefs && charRef && prodRef) {
       refNote =
         'Reference images: image 1 = the character (keep identity, face, hair and outfit consistent); image 2 = the product (show this EXACT product, same shape/label/colors). Place the character and the product together naturally in the same scene — the character presenting/holding/using the product.';
-    } else if (charRef) {
+    } else if (useRefs && charRef) {
       refNote = 'Reference image = the character — keep identity, face and outfit consistent.';
-    } else if (prodRef) {
+    } else if (useRefs && prodRef) {
       refNote = 'Reference image = the product — feature this exact product in the scene.';
     }
     const prompt = refNote ? `${refNote}\n\n${scene.visualPrompt}` : scene.visualPrompt;
@@ -523,6 +527,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
                       sceneIndex={sceneIdx}
                       scene={scene}
                       aspectRatio={form.aspectRatio}
+                      hasRefs={!!charRefImage() || (isSales && !!form.productImage)}
                       media={media[key] ?? emptyMedia()}
                       onSceneChange={(patch) => patchScene(epIndex, sceneIdx, patch)}
                       onMediaChange={(patch) => patchMedia(key, patch)}

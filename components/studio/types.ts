@@ -130,6 +130,12 @@ export type SceneMedia = {
   /** Per-scene prompt-regeneration spinners. */
   regenImageLoading?: boolean;
   regenVideoLoading?: boolean;
+
+  /**
+   * Lock the character/product look via image-to-image (uses the reference
+   * images). Default ON when refs exist. Turn OFF for fast text-to-image.
+   */
+  lockRef?: boolean;
 };
 
 export const VISUAL_STYLES: VisualStyle[] = [
