@@ -17,6 +17,8 @@ import {
   Copy,
   LayoutGrid,
   ExternalLink,
+  Zap,
+  Download,
 } from 'lucide-react';
 import { Badge, Button, Card, PageHeader, Spinner, EmptyState } from '@/components/ui';
 import { useCharacters, buildCharacterSheetPrompt, type Character } from '@/lib/characters';
@@ -241,6 +243,35 @@ function CharacterSheetModal({
 }) {
   const prompt = buildCharacterSheetPrompt(character);
   const [copied, setCopied] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [genError, setGenError] = useState<string | null>(null);
+
+  const generate = async () => {
+    if (!character.refImage) return;
+    setGenerating(true);
+    setGenError(null);
+    setResult(null);
+    try {
+      const res = await fetch('/api/character-sheet', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ prompt, refImage: character.refImage }),
+      });
+      const data = (await res.json().catch(() => null)) as
+        | { ok: true; dataUrl: string }
+        | { ok: false; error: string }
+        | null;
+      if (!res.ok || !data || data.ok !== true) {
+        throw new Error((data && 'error' in data && data.error) || `สร้างไม่สำเร็จ (HTTP ${res.status})`);
+      }
+      setResult(data.dataUrl);
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : 'สร้างไม่สำเร็จ');
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const copy = async () => {
     try {
@@ -269,7 +300,55 @@ function CharacterSheetModal({
         </div>
 
         <div className="space-y-4 overflow-y-auto px-5 py-5">
-          {/* How-to */}
+          {/* One-click auto generate (ChatGPT image-to-image via ai-flow) */}
+          {character.refImage && (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+              <button
+                type="button"
+                onClick={generate}
+                disabled={generating}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-95 disabled:opacity-50"
+              >
+                {generating ? (
+                  <>
+                    <Spinner size={16} /> กำลังสร้าง Character Sheet… (~2–4 นาที อย่าปิดหน้านี้)
+                  </>
+                ) : (
+                  <>
+                    <Zap className="h-4 w-4" /> สร้าง Character Sheet อัตโนมัติ (ChatGPT)
+                  </>
+                )}
+              </button>
+              <p className="mt-2 text-xs text-emerald-800">
+                ปุ่มเดียวจบ — ส่งรูป ref + prompt เข้า ChatGPT ให้อัตโนมัติ · ต้องรันแอปแบบ local-server +{' '}
+                <code className="font-mono">ai-flow login chatgpt</code> บนเครื่องนี้ก่อน
+              </p>
+              {genError && (
+                <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                  {genError}
+                </p>
+              )}
+              {result && (
+                <div className="mt-3 space-y-2">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={result}
+                    alt="character sheet"
+                    className="w-full rounded-xl ring-1 ring-slate-200"
+                  />
+                  <a
+                    href={result}
+                    download={`character-sheet-${character.name || 'char'}.png`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    <Download className="h-3.5 w-3.5" /> เซฟ Character Sheet
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* How-to (manual fallback) */}
           <div className="flex items-start gap-2.5 rounded-xl border border-violet-100 bg-violet-50/60 px-4 py-3 text-sm text-slate-600">
             <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
             <div>

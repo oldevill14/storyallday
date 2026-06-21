@@ -123,6 +123,42 @@ export function runAiFlow(sub: string, prompt: string, outExt: string): Promise<
   });
 }
 
+/** Decode a base64 image data URL to a temp file; returns its absolute path. */
+async function dataUrlToTempFile(dataUrl: string): Promise<string> {
+  const m = /^data:(image\/(png|jpe?g|webp));base64,(.+)$/i.exec(dataUrl);
+  if (!m) throw new Error('รูปอ้างอิงไม่ถูกต้อง (ต้องเป็น data URL ของรูปภาพ)');
+  const sub = m[2].toLowerCase();
+  const ext = sub.startsWith('jp') ? 'jpg' : sub;
+  const id = `${Date.now()}_${counter++}`;
+  const p = path.join(os.tmpdir(), `saf_ref_${id}.${ext}`);
+  await fs.writeFile(p, Buffer.from(m[3], 'base64'));
+  return p;
+}
+
+/**
+ * Generate an image FROM a reference image (image-to-image) via ai-flow's
+ * `image-ref` (ChatGPT /images). Writes the ref to a temp file, runs the CLI,
+ * returns the produced file path. Serialized like every other ai-flow call.
+ */
+export function runAiFlowImageRef(prompt: string, refDataUrl: string): Promise<string> {
+  return enqueue(async () => {
+    const refPath = await dataUrlToTempFile(refDataUrl);
+    const id = `${Date.now()}_${counter++}`;
+    const outPath = path.join(os.tmpdir(), `saf_sheet_${id}.png`);
+    try {
+      const { stdout, stderr } = await execAiFlow(
+        ['image-ref', prompt, refPath, outPath],
+        300_000,
+      );
+      if (await fileExists(outPath)) return outPath;
+      const detail = (stderr.trim() || stdout.trim() || 'ai-flow ไม่ได้สร้างไฟล์ผลลัพธ์').slice(-2000);
+      throw new Error(detail);
+    } finally {
+      void fs.unlink(refPath).catch(() => {});
+    }
+  });
+}
+
 async function fileExists(p: string): Promise<boolean> {
   try {
     const st = await fs.stat(p);
