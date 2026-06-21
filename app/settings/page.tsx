@@ -27,7 +27,7 @@ import {
   Spinner,
 } from '@/components/ui';
 import { useStore, useHydrated } from '@/lib/store';
-import { callAI } from '@/lib/ai';
+import { callAI, humanizeAIError } from '@/lib/ai';
 import type { AISettings, Provider } from '@/lib/types';
 import {
   PROVIDERS,
@@ -153,7 +153,9 @@ export default function SettingsPage() {
     } catch (e) {
       setTest({
         status: 'error',
-        message: e instanceof Error ? e.message : 'เกิดข้อผิดพลาดในการเชื่อมต่อ',
+        message: humanizeAIError(
+          e instanceof Error ? e.message : 'เกิดข้อผิดพลาดในการเชื่อมต่อ'
+        ),
       });
     }
   };

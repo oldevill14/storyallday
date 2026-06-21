@@ -34,9 +34,32 @@ export async function callAI(
     const msg =
       (data && typeof data.error === 'string' && data.error) ||
       `เรียก AI ไม่สำเร็จ (HTTP ${res.status})`;
-    throw new Error(msg);
+    // Friendly Thai for the common account-side failures (no quota/billing/etc).
+    throw new Error(humanizeAIError(msg));
   }
   return data.text;
+}
+
+/**
+ * Turn a raw provider error into an actionable Thai message. Recognizes the
+ * common cases (no quota/billing, bad key, rate limit, bad model); otherwise
+ * returns the original message.
+ */
+export function humanizeAIError(msg: string): string {
+  const m = (msg || '').toLowerCase();
+  if (/insufficient_quota|exceeded your current quota|check your plan|billing|\bquota\b/.test(m)) {
+    return 'บัญชีของผู้ให้บริการนี้เครดิต/โควต้าหมด หรือยังไม่ได้ตั้งค่าการเรียกเก็บเงิน (billing) — เติมเครดิตในบัญชีผู้ให้บริการก่อน แล้วลองใหม่ หรือสลับไปใช้ผู้ให้บริการอื่นที่พร้อมใช้งาน (เช่น GLM z.ai, OpenRouter โมเดลฟรี, Gemini)';
+  }
+  if (/invalid[_ ]api[_ ]key|incorrect api key|invalid authentication|unauthorized|\b401\b/.test(m)) {
+    return 'API Key ไม่ถูกต้องหรือถูกเพิกถอน — ตรวจสอบและวางคีย์ใหม่อีกครั้ง';
+  }
+  if (/rate limit|too many requests|\b429\b/.test(m)) {
+    return 'เรียกใช้งานถี่เกินไป (rate limit) — รอสักครู่แล้วลองใหม่';
+  }
+  if (/model.*(not found|does not exist)|unknown model|invalid model|no such model/.test(m)) {
+    return 'ไม่พบโมเดลที่เลือกในบัญชีนี้ — เลือกโมเดลอื่น หรือพิมพ์ชื่อโมเดลให้ถูกต้อง';
+  }
+  return msg;
 }
 
 /**
