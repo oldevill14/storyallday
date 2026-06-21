@@ -22,6 +22,8 @@ type Props = {
   generating: boolean;
   /** Whether an AI key is configured (gates the generate button + shows notice). */
   hasKey: boolean;
+  /** Sales mode shows product + selling-style + cast; drama mode hides them. */
+  salesMode: boolean;
   /** Reusable characters to pick from (from /characters). */
   characters: CastOption[];
   selectedIds: string[];
@@ -77,6 +79,7 @@ export function StoryForm({
   onGenerate,
   generating,
   hasKey,
+  salesMode,
   characters,
   selectedIds,
   onToggleCharacter,
@@ -131,6 +134,8 @@ export function StoryForm({
         </div>
       </div>
 
+      {salesMode && (
+        <>
       {/* Product to sell */}
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
         <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
@@ -230,6 +235,8 @@ export function StoryForm({
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* Counts */}
       <div className="flex flex-wrap gap-6">

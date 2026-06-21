@@ -13,6 +13,7 @@ import {
   Tag,
   Plug,
   Settings2,
+  ShoppingBag,
   UserCog,
   Users,
   type LucideProps,
@@ -47,7 +48,8 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { href: '/brand', label: 'แบรนด์ของฉัน', icon: Tag },
       { href: '/characters', label: 'สร้างตัวละคร', icon: Users },
-      { href: '/studio', label: 'สร้างคลิปขายของ', icon: Clapperboard },
+      { href: '/studio', label: 'สตูดิโอละครสั้น', icon: Clapperboard },
+      { href: '/sales-clip', label: 'สร้างคลิปขายของ', icon: ShoppingBag },
     ],
   },
   {
