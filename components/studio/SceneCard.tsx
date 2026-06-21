@@ -4,12 +4,16 @@ import { useState } from 'react';
 import {
   AlertCircle,
   Camera,
+  Check,
   Clapperboard,
   Clock3,
+  Copy,
+  Download,
   Film,
   ImageIcon,
   MapPin,
   MessageSquareText,
+  RefreshCw,
   Sparkles,
 } from 'lucide-react';
 import { Badge, Button, Spinner } from '@/components/ui';
@@ -24,7 +28,44 @@ type Props = {
   onMediaChange: (patch: Partial<SceneMedia>) => void;
   onGenerateImage: () => void;
   onGenerateVideo: () => void;
+  /** Regenerate this scene's image/video prompt via AI (uses cast + product). */
+  onRegenImage: () => void;
+  onRegenVideo: () => void;
 };
+
+/** Trigger a browser download of a data URL. */
+function downloadDataUrl(dataUrl: string, filename: string) {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+/** Small copy-to-clipboard button with a transient ✓. */
+function CopyBtn({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch {
+          /* clipboard blocked — ignore */
+        }
+      }}
+      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-slate-500 hover:bg-slate-100 hover:text-violet-700"
+      title={`คัดลอก${label}`}
+    >
+      {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+      {copied ? 'คัดลอกแล้ว' : 'คัดลอก'}
+    </button>
+  );
+}
 
 const fieldLabel = 'mb-1 flex items-center gap-1.5 text-xs font-semibold text-slate-500';
 const textareaBase =
@@ -41,12 +82,16 @@ export function SceneCard({
   onMediaChange,
   onGenerateImage,
   onGenerateVideo,
+  onRegenImage,
+  onRegenVideo,
 }: Props) {
   const [showPrompts, setShowPrompts] = useState(false);
 
   const imageLoading = media.imageStatus === 'loading';
   const videoLoading = media.videoStatus === 'loading';
   const busy = imageLoading || videoLoading;
+  const regenImg = !!media.regenImageLoading;
+  const regenVid = !!media.regenVideoLoading;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -102,9 +147,24 @@ export function SceneCard({
           {showPrompts && (
             <div className="space-y-3">
               <div>
-                <label className={fieldLabel}>
-                  <ImageIcon className="h-3.5 w-3.5" /> Visual prompt (image)
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className={fieldLabel + ' mb-0'}>
+                    <ImageIcon className="h-3.5 w-3.5" /> Visual prompt (image)
+                  </label>
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={onRegenImage}
+                      disabled={regenImg}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-violet-600 hover:bg-violet-50 disabled:opacity-50"
+                      title="ให้ AI เขียน prompt ภาพใหม่ (รวมตัวละคร+สินค้า)"
+                    >
+                      <RefreshCw className={'h-3 w-3' + (regenImg ? ' animate-spin' : '')} />
+                      {regenImg ? 'กำลังเขียน…' : 'Regen'}
+                    </button>
+                    <CopyBtn text={scene.visualPrompt} label="prompt ภาพ" />
+                  </div>
+                </div>
                 <textarea
                   rows={3}
                   value={scene.visualPrompt}
@@ -113,9 +173,24 @@ export function SceneCard({
                 />
               </div>
               <div>
-                <label className={fieldLabel}>
-                  <Camera className="h-3.5 w-3.5" /> Video prompt (image-to-video)
-                </label>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className={fieldLabel + ' mb-0'}>
+                    <Camera className="h-3.5 w-3.5" /> Video prompt (image-to-video)
+                  </label>
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={onRegenVideo}
+                      disabled={regenVid}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-violet-600 hover:bg-violet-50 disabled:opacity-50"
+                      title="ให้ AI เขียน prompt วิดีโอใหม่ (รวมตัวละคร+สินค้า)"
+                    >
+                      <RefreshCw className={'h-3 w-3' + (regenVid ? ' animate-spin' : '')} />
+                      {regenVid ? 'กำลังเขียน…' : 'Regen'}
+                    </button>
+                    <CopyBtn text={scene.videoPrompt} label="prompt วิดีโอ" />
+                  </div>
+                </div>
                 <textarea
                   rows={3}
                   value={scene.videoPrompt}
@@ -197,6 +272,34 @@ export function SceneCard({
               </div>
             )}
           </div>
+
+          {/* Save buttons (when media exists) */}
+          {(media.imageDataUrl || media.videoDataUrl) && (
+            <div className="flex flex-wrap justify-center gap-1.5">
+              {media.imageDataUrl && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadDataUrl(media.imageDataUrl!, `ep${ep}_scene${sceneIndex + 1}.png`)
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 hover:text-violet-700"
+                >
+                  <Download className="h-3.5 w-3.5" /> เซฟภาพ
+                </button>
+              )}
+              {media.videoDataUrl && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    downloadDataUrl(media.videoDataUrl!, `ep${ep}_scene${sceneIndex + 1}.mp4`)
+                  }
+                  className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-50 hover:text-violet-700"
+                >
+                  <Download className="h-3.5 w-3.5" /> เซฟวิดีโอ
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Inline errors */}
           {media.imageStatus === 'error' && media.imageError && (

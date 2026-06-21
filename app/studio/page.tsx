@@ -31,12 +31,18 @@ import { useStore, useHydrated } from '@/lib/store';
 import { useAuth } from '@/lib/auth';
 import { callAI } from '@/lib/ai';
 import { db } from '@/lib/firebase';
+import { useCharacters, characterPromptBlock } from '@/lib/characters';
 import { StoryForm } from '@/components/studio/StoryForm';
 import { SceneCard } from '@/components/studio/SceneCard';
 import {
   buildSystemPrompt,
   buildUserPrompt,
+  buildImageRegenPrompt,
+  buildVideoRegenPrompt,
+  finalizeImagePrompt,
+  finalizeVideoPrompt,
   parseDrama,
+  type CreativeContext,
 } from '@/components/studio/dramaPrompt';
 import {
   emptyMedia,
@@ -54,6 +60,8 @@ const DEFAULT_FORM: StudioForm = {
   scenesPerEpisode: 3,
   style: 'Photorealistic',
   aspectRatio: '9:16',
+  productName: '',
+  productDetail: '',
 };
 
 type SavedDrama = { id: string; title: string; createdAt?: string };
@@ -88,6 +96,24 @@ export default function StudioPage() {
   const [form, setForm] = useState<StudioForm>(DEFAULT_FORM);
   const [drama, setDrama] = useState<Drama | null>(null);
   const [media, setMedia] = useState<Record<string, SceneMedia>>({});
+
+  // Reusable characters (from /characters) + which are cast in this clip.
+  const characters = useCharacters((s) => s.items);
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
+
+  // Product + cast context woven into generation + regeneration.
+  const creativeCtx = (): CreativeContext => ({
+    productName: form.productName,
+    productDetail: form.productDetail,
+    cast: characters
+      .filter((c) => selectedCharacterIds.includes(c.id))
+      .map((c) => characterPromptBlock(c)),
+  });
+
+  const toggleCharacter = (id: string) =>
+    setSelectedCharacterIds((ids) =>
+      ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+    );
 
   const [generating, setGenerating] = useState(false);
   const [genError, setGenError] = useState<string | null>(null);
@@ -146,7 +172,7 @@ export default function StudioPage() {
       const text = await callAI(
         {
           system: buildSystemPrompt(form.style),
-          prompt: buildUserPrompt(form),
+          prompt: buildUserPrompt(form, creativeCtx()),
         },
         settings
       );
@@ -223,6 +249,49 @@ export default function StudioPage() {
     }
   };
 
+  // --- Regenerate a single scene's prompt (AI), weaving in cast + product ----
+  const regenImagePrompt = async (
+    key: string,
+    epIndex: number,
+    sceneIdx: number,
+    scene: Scene
+  ) => {
+    patchMedia(key, { regenImageLoading: true });
+    setGenError(null);
+    try {
+      const text = await callAI(
+        { prompt: buildImageRegenPrompt(scene, form.style, creativeCtx()) },
+        settings
+      );
+      patchScene(epIndex, sceneIdx, { visualPrompt: finalizeImagePrompt(text, form.style) });
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : 'สร้าง prompt ภาพใหม่ไม่สำเร็จ');
+    } finally {
+      patchMedia(key, { regenImageLoading: false });
+    }
+  };
+
+  const regenVideoPrompt = async (
+    key: string,
+    epIndex: number,
+    sceneIdx: number,
+    scene: Scene
+  ) => {
+    patchMedia(key, { regenVideoLoading: true });
+    setGenError(null);
+    try {
+      const text = await callAI(
+        { prompt: buildVideoRegenPrompt(scene, form.style, creativeCtx()) },
+        settings
+      );
+      patchScene(epIndex, sceneIdx, { videoPrompt: finalizeVideoPrompt(text) });
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : 'สร้าง prompt วิดีโอใหม่ไม่สำเร็จ');
+    } finally {
+      patchMedia(key, { regenVideoLoading: false });
+    }
+  };
+
   // --- Persist the drama to Firestore ---------------------------------------
   const onSave = async () => {
     if (!drama) return;
@@ -238,6 +307,7 @@ export default function StudioPage() {
       await setDoc(ref, {
         form,
         drama,
+        cast: selectedCharacterIds,
         createdAt: new Date().toISOString(),
         savedAt: serverTimestamp(),
       });
@@ -292,6 +362,9 @@ export default function StudioPage() {
         onGenerate={onGenerate}
         generating={generating}
         hasKey={hasKey}
+        characters={characters.map((c) => ({ id: c.id, name: c.name, style: c.style }))}
+        selectedIds={selectedCharacterIds}
+        onToggleCharacter={toggleCharacter}
       />
 
       {/* Generate error */}
@@ -388,6 +461,8 @@ export default function StudioPage() {
                       onMediaChange={(patch) => patchMedia(key, patch)}
                       onGenerateImage={() => genImage(key, scene)}
                       onGenerateVideo={() => genVideo(key, scene)}
+                      onRegenImage={() => regenImagePrompt(key, epIndex, sceneIdx, scene)}
+                      onRegenVideo={() => regenVideoPrompt(key, epIndex, sceneIdx, scene)}
                     />
                   );
                 })}

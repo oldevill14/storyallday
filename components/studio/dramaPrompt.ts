@@ -59,18 +59,48 @@ export function buildSystemPrompt(style: VisualStyle): string {
 }`;
 }
 
-/** User prompt — feeds the topic/idea + episode/scene counts. */
-export function buildUserPrompt(form: StudioForm): string {
+/** Optional product + cast context woven into generation and regeneration. */
+export type CreativeContext = {
+  productName?: string;
+  productDetail?: string;
+  /** Verbatim English character description blocks (kept identical for consistency). */
+  cast?: string[];
+};
+
+/** Thai context block describing the product + chosen cast, or '' if none. */
+function contextBlock(ctx?: CreativeContext): string {
+  if (!ctx) return '';
+  const lines: string[] = [];
+  if (ctx.productName?.trim() || ctx.productDetail?.trim()) {
+    lines.push(
+      `สินค้าที่ต้องขาย/นำเสนอในคลิป: ${ctx.productName?.trim() || '(ระบุในรายละเอียด)'}` +
+        (ctx.productDetail?.trim() ? `\nรายละเอียดสินค้า: ${ctx.productDetail.trim()}` : '')
+    );
+    lines.push(
+      'ให้ทุกตอน/ฉากร้อยเรื่องให้ "ขายสินค้านี้" อย่างเป็นธรรมชาติ (รีวิว/ป้ายยา/เล่าเรื่องแล้วปิดการขาย) และให้สินค้าปรากฏเด่นในภาพ'
+    );
+  }
+  if (ctx.cast && ctx.cast.length > 0) {
+    lines.push(
+      'ตัวละครหลัก (ต้องใช้ตัวละครเหล่านี้เท่านั้น และคัดลอกคำบรรยายลักษณะ "เป๊ะ ๆ" ลงในทุก visualPrompt/videoPrompt เพื่อให้หน้าตา/สไตล์คงที่ทุกฉาก):'
+    );
+    ctx.cast.forEach((c, i) => lines.push(`  ${i + 1}. ${c}`));
+  }
+  return lines.length ? `\n${lines.join('\n')}\n` : '';
+}
+
+/** User prompt — feeds the topic/idea + episode/scene counts (+ product/cast). */
+export function buildUserPrompt(form: StudioForm, ctx?: CreativeContext): string {
   const titleLine = form.title.trim()
     ? `ชื่อเรื่อง (ถ้ามีให้ใช้เป็นแนวทาง): ${form.title.trim()}`
     : 'ชื่อเรื่อง: (ให้คุณตั้งให้)';
 
-  return `สร้างบทละครสั้นแนวตั้งจากข้อมูลนี้
+  return `สร้างบทละครสั้นแนวตั้ง (คลิปขายของ) จากข้อมูลนี้
 
 ${titleLine}
 หัวข้อ/แนวคิด:
 ${form.topic.trim()}
-
+${contextBlock(ctx)}
 จำนวนตอน: ${form.episodeCount} ตอน (ep เรียง 1..${form.episodeCount})
 จำนวนฉากต่อตอน: ${form.scenesPerEpisode} ฉาก
 สไตล์ภาพ: ${form.style}
@@ -82,6 +112,72 @@ ${form.topic.trim()}
 - ทุก visualPrompt เริ่มด้วย "${form.style}" และลงท้ายด้วยประโยคความปลอดภัย
 - ทุก videoPrompt มีคำสั่งกล้อง + บทพูดในเครื่องหมายคำพูด + ลงท้ายด้วยประโยคความปลอดภัย
 - ตอบเป็น JSON ตามโครงสร้างที่กำหนดเท่านั้น`;
+}
+
+/** Finalize an AI-returned image prompt (ensure style prefix + safety suffix). */
+export function finalizeImagePrompt(text: string, style: VisualStyle): string {
+  return ensureSafety(ensureStyle(text, style));
+}
+/** Finalize an AI-returned video prompt (ensure safety suffix). */
+export function finalizeVideoPrompt(text: string): string {
+  return ensureSafety(text);
+}
+
+function ctxForRegen(ctx?: CreativeContext): string {
+  const parts: string[] = [];
+  if (ctx?.productName?.trim() || ctx?.productDetail?.trim()) {
+    parts.push(
+      `Product to feature prominently: ${ctx?.productName?.trim() || ''}${
+        ctx?.productDetail?.trim() ? ` — ${ctx.productDetail.trim()}` : ''
+      }`
+    );
+  }
+  if (ctx?.cast && ctx.cast.length) {
+    parts.push(
+      `Characters (use these EXACT descriptions verbatim for identity consistency): ${ctx.cast.join(' | ')}`
+    );
+  }
+  return parts.join('\n');
+}
+
+/** AI instruction to regenerate ONE scene's image prompt (returns English prompt only). */
+export function buildImageRegenPrompt(
+  scene: Scene,
+  style: VisualStyle,
+  ctx?: CreativeContext
+): string {
+  return `Rewrite the IMAGE prompt for this single vertical 9:16 scene. Output ONLY the English image prompt — no explanation, no quotes, no markdown.
+
+Start with the visual style "${style}". Describe the subject, setting, lighting, camera angle, composition. ${ctxForRegen(
+    ctx
+  )}
+
+Scene:
+- setting: ${scene.setting}
+- action: ${scene.action}
+- dialogue (Thai, for context): ${scene.dialogue}
+
+End with exactly: ${SAFETY_SUFFIX}`;
+}
+
+/** AI instruction to regenerate ONE scene's image-to-video prompt (English only). */
+export function buildVideoRegenPrompt(
+  scene: Scene,
+  style: VisualStyle,
+  ctx?: CreativeContext
+): string {
+  return `Rewrite the IMAGE-TO-VIDEO prompt for this single vertical 9:16 scene. Output ONLY the English prompt — no explanation, no markdown.
+
+Describe what MOVES/changes (camera direction + character motion), keep it ~8 seconds, and include the spoken line in quotes. ${ctxForRegen(
+    ctx
+  )}
+
+Scene:
+- setting: ${scene.setting}
+- action: ${scene.action}
+- spoken line (Thai): "${scene.dialogue}"
+
+End with exactly: ${SAFETY_SUFFIX}`;
 }
 
 function ensureSafety(prompt: string): string {

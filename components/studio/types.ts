@@ -53,6 +53,9 @@ export type StudioForm = {
   scenesPerEpisode: 1 | 3 | 5;
   style: VisualStyle;
   aspectRatio: '9:16';
+  /** Product being sold — woven into every scene prompt. */
+  productName: string;
+  productDetail: string;
 };
 
 /** Provider for image generation (maps to the ai-flow profiles). */
@@ -70,6 +73,10 @@ export type SceneMedia = {
   videoStatus: SceneMediaStatus;
   videoDataUrl?: string;
   videoError?: string;
+
+  /** Per-scene prompt-regeneration spinners. */
+  regenImageLoading?: boolean;
+  regenVideoLoading?: boolean;
 };
 
 export const VISUAL_STYLES: VisualStyle[] = [

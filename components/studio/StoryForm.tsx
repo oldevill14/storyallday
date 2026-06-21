@@ -1,6 +1,7 @@
 'use client';
 
-import { Clapperboard, Sparkles, Wand2 } from 'lucide-react';
+import Link from 'next/link';
+import { Clapperboard, Package, Sparkles, Users, Wand2 } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import {
   STYLE_LABELS,
@@ -9,6 +10,8 @@ import {
   type VisualStyle,
 } from './types';
 
+export type CastOption = { id: string; name: string; style?: string };
+
 type Props = {
   form: StudioForm;
   onChange: (patch: Partial<StudioForm>) => void;
@@ -16,6 +19,10 @@ type Props = {
   generating: boolean;
   /** Whether an AI key is configured (gates the generate button + shows notice). */
   hasKey: boolean;
+  /** Reusable characters to pick from (from /characters). */
+  characters: CastOption[];
+  selectedIds: string[];
+  onToggleCharacter: (id: string) => void;
 };
 
 const COUNT_OPTS: Array<1 | 3 | 5> = [1, 3, 5];
@@ -61,7 +68,16 @@ function CountPicker({
   );
 }
 
-export function StoryForm({ form, onChange, onGenerate, generating, hasKey }: Props) {
+export function StoryForm({
+  form,
+  onChange,
+  onGenerate,
+  generating,
+  hasKey,
+  characters,
+  selectedIds,
+  onToggleCharacter,
+}: Props) {
   const canGenerate = hasKey && form.topic.trim().length > 0 && !generating;
 
   return (
@@ -110,6 +126,75 @@ export function StoryForm({ form, onChange, onGenerate, generating, hasKey }: Pr
             ยิ่งระบุละเอียด (ตัวละคร อารมณ์ ฉากจบ) บทที่ได้ยิ่งตรงใจ
           </p>
         </div>
+      </div>
+
+      {/* Product to sell */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+          <Package className="h-4 w-4 text-violet-600" /> สินค้าที่จะขาย{' '}
+          <span className="font-normal text-slate-400">(ไม่บังคับ)</span>
+        </label>
+        <input
+          type="text"
+          value={form.productName}
+          onChange={(e) => onChange({ productName: e.target.value })}
+          placeholder="เช่น เซรั่มบำรุงผิวหน้า Glow Booster"
+          className={inputBase}
+        />
+        <textarea
+          rows={2}
+          value={form.productDetail}
+          onChange={(e) => onChange({ productDetail: e.target.value })}
+          placeholder="จุดเด่น / ราคา / โปรโมชัน เช่น ลดเลือนริ้วรอยใน 7 วัน · ขวดละ 590฿ · ซื้อ 2 แถม 1"
+          className={inputBase + ' mt-2 resize-y leading-relaxed'}
+        />
+        <p className="mt-1.5 text-xs text-slate-400">
+          ระบบจะร้อยสินค้านี้เข้าไปในทุกฉาก + พรอมต์ภาพ/วิดีโอให้อัตโนมัติ
+        </p>
+      </div>
+
+      {/* Cast (reusable characters) */}
+      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+            <Users className="h-4 w-4 text-violet-600" /> ตัวละครในคลิป{' '}
+            <span className="font-normal text-slate-400">(เลือกได้หลายตัว)</span>
+          </label>
+          <Link href="/characters" className="text-xs font-medium text-violet-600 hover:underline">
+            + จัดการตัวละคร
+          </Link>
+        </div>
+        {characters.length === 0 ? (
+          <p className="text-sm text-slate-400">
+            ยังไม่มีตัวละคร —{' '}
+            <Link href="/characters" className="font-medium text-violet-600 hover:underline">
+              ไปสร้างตัวละคร
+            </Link>{' '}
+            แล้วกลับมาเลือกใช้ได้เลย
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {characters.map((c) => {
+              const active = selectedIds.includes(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => onToggleCharacter(c.id)}
+                  className={
+                    'rounded-full px-3 py-1.5 text-sm font-medium transition-colors ' +
+                    (active
+                      ? 'bg-violet-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-violet-50 hover:text-violet-700')
+                  }
+                >
+                  {active ? '✓ ' : ''}
+                  {c.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Counts */}
