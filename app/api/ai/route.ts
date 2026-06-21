@@ -7,9 +7,11 @@
 // to third parties (it still comes from the client store, but we don't expose
 // provider responses' raw shape to the browser).
 
-import type { AIProxyRequest, Provider } from '@/lib/types';
+import { spawn } from 'node:child_process';
+import type { AIProxyRequest, AIMessage, Provider } from '@/lib/types';
 
 export const runtime = 'nodejs';
+export const maxDuration = 300;
 
 const DEFAULT_BASE_URLS: Record<Provider, string> = {
   openai: 'https://api.openai.com',
@@ -17,7 +19,98 @@ const DEFAULT_BASE_URLS: Record<Provider, string> = {
   zai: 'https://api.z.ai/api/anthropic',
   gemini: 'https://generativelanguage.googleapis.com',
   openrouter: 'https://openrouter.ai/api/v1',
+  cli: 'local',
 };
+
+// --- CLI (subscription) provider -------------------------------------------
+// Runs a locally-installed, already-logged-in CLI so chat uses the user's
+// SUBSCRIPTION instead of per-token API credits. Local-server mode only.
+
+/** Spawn a CLI (args array — no shell, so prompts can't inject). */
+function runCli(cmd: string, args: string[], timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn(cmd, args, { timeout: timeoutMs });
+    } catch (e) {
+      reject(e);
+      return;
+    }
+    let out = '';
+    let err = '';
+    child.stdout?.on('data', (d) => (out += d.toString()));
+    child.stderr?.on('data', (d) => (err += d.toString()));
+    child.on('error', (e: NodeJS.ErrnoException) =>
+      reject(
+        new Error(
+          e.code === 'ENOENT'
+            ? `ไม่พบคำสั่ง "${cmd}" บนเครื่อง — ติดตั้ง/ล็อกอิน CLI ก่อน`
+            : e.message
+        )
+      )
+    );
+    child.on('close', (code) => {
+      if (code === 0) resolve(out);
+      else reject(new Error(err.trim() || out.trim() || `${cmd} ออกด้วยรหัส ${code}`));
+    });
+    child.stdin?.end();
+  });
+}
+
+/** Flatten system + messages into a single prompt string for the CLI. */
+function flattenPrompt(system: string | undefined, messages: AIMessage[]): string {
+  const parts: string[] = [];
+  if (system?.trim()) parts.push(`[ระบบ/แนวทาง]\n${system.trim()}`);
+  for (const m of messages) parts.push(m.content);
+  return parts.join('\n\n');
+}
+
+/** codex exec prints agent chatter; strip the noise to the actual answer. */
+function cleanCodex(raw: string): string {
+  const drop =
+    /^(hook:|tokens used|user$|codex$|warning:|Reading additional|--------|\[?\d[\d,]*\]?$|thinking$)/i;
+  const lines = raw
+    .split('\n')
+    .map((l) => l.replace(/\[[0-9;]*m/g, '').trimEnd()) // strip ANSI
+    .filter((l) => l.trim() && !drop.test(l.trim()));
+  return lines.join('\n').trim();
+}
+
+async function handleCli(
+  model: string,
+  system: string | undefined,
+  messages: AIMessage[]
+): Promise<Response> {
+  const prompt = flattenPrompt(system, messages);
+  if (!prompt.trim()) return json({ error: 'ไม่มีข้อความให้ประมวลผล' }, 400);
+  const engine = (model || 'claude').trim();
+  try {
+    let text: string;
+    if (engine === 'claude') {
+      // Claude Code, logged in with a Claude subscription. Clean text output.
+      text = (await runCli('claude', ['-p', prompt], 180_000)).trim();
+    } else if (engine === 'codex') {
+      // Codex CLI, logged in with ChatGPT. Output is chatty → clean it.
+      const raw = await runCli(
+        'codex',
+        ['exec', '--skip-git-repo-check', prompt],
+        240_000
+      );
+      text = cleanCodex(raw);
+    } else if (engine.startsWith('ollama')) {
+      // Local model, e.g. "ollama:llama3.1" → run llama3.1 (free/offline).
+      const m = engine.includes(':') ? engine.slice(engine.indexOf(':') + 1) : 'llama3.1';
+      text = (await runCli('ollama', ['run', m, prompt], 240_000)).trim();
+    } else {
+      return json({ error: `ไม่รู้จัก CLI engine: ${engine} (ใช้ claude / codex / ollama:<model>)` }, 400);
+    }
+    if (!text) return json({ error: 'CLI ตอบกลับว่างเปล่า ลองใหม่' }, 502);
+    return json({ text });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'เรียก CLI ไม่สำเร็จ';
+    return json({ error: msg }, 502);
+  }
+}
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -53,6 +146,15 @@ export async function POST(req: Request) {
   if (!provider || !DEFAULT_BASE_URLS[provider]) {
     return json({ error: `Unknown provider: ${String(provider)}` }, 400);
   }
+
+  // CLI provider runs a local subscription CLI — needs no API key.
+  if (provider === 'cli') {
+    if (!Array.isArray(messages)) {
+      return json({ error: 'messages must be an array' }, 400);
+    }
+    return handleCli(model, system, messages);
+  }
+
   if (!apiKey || typeof apiKey !== 'string') {
     return json({ error: 'Missing API key. ตั้งค่า API key ในหน้าตั้งค่าก่อน' }, 400);
   }

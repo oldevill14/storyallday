@@ -81,6 +81,16 @@ export const PROVIDERS: ProviderMeta[] = [
     keyUrl: 'https://openrouter.ai/keys',
     accent: 'violet',
   },
+  {
+    id: 'cli',
+    label: 'CLI ในเครื่อง',
+    tagline: 'ใช้ subscription · ไม่เปลือง API',
+    defaultModel: 'claude',
+    models: ['claude', 'codex', 'ollama:llama3.1'],
+    baseUrlPlaceholder: '— ไม่ต้องกรอก —',
+    keyUrl: '#',
+    accent: 'emerald',
+  },
 ];
 
 /** Look up provider metadata by id (falls back to the first entry). */

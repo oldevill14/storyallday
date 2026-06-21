@@ -12,7 +12,7 @@ type PriceRow = { in: number; out: number };
 
 // Keyed by an id PREFIX; the longest prefix that the model id starts with wins.
 // (Order doesn't matter — matching picks the longest key.)
-const TABLE: Record<Exclude<Provider, 'openrouter'>, Record<string, PriceRow>> = {
+const TABLE: Record<Exclude<Provider, 'openrouter' | 'cli'>, Record<string, PriceRow>> = {
   openai: {
     'gpt-4o-mini': { in: 0.15, out: 0.6 },
     'gpt-4o': { in: 2.5, out: 10 },
@@ -70,7 +70,7 @@ export type CuratedPrice = {
  * OpenRouter is excluded — its prices come from the live catalog instead.
  */
 export function curatedPrice(provider: Provider, id: string): CuratedPrice | null {
-  if (provider === 'openrouter') return null;
+  if (provider === 'openrouter' || provider === 'cli') return null;
   const table = TABLE[provider];
   if (!table) return null;
   const lid = id.toLowerCase();
