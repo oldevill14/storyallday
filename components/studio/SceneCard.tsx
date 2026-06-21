@@ -205,17 +205,36 @@ export function SceneCard({
 
           {/* Generate controls */}
           <div className="flex flex-wrap items-center gap-2 pt-1">
-            {/* Provider dropdown for image */}
-            <select
-              value={media.imageProvider}
-              onChange={(e) => onMediaChange({ imageProvider: e.target.value as ImageProvider })}
-              disabled={busy}
-              aria-label="ผู้ให้บริการสร้างรูปภาพ"
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-medium text-slate-700 focus:border-violet-400 focus:outline-none focus:ring-2 focus:ring-violet-200 disabled:opacity-50"
-            >
-              <option value="grok">Grok</option>
-              <option value="chatgpt">ChatGPT</option>
-            </select>
+            {/* Image provider toggle (Grok เร็ว · ChatGPT ดีกว่าเมื่อรวมตัวละคร+สินค้า) */}
+            <div className="inline-flex items-center gap-1.5">
+              <span className="text-[11px] font-medium text-slate-400">ภาพ:</span>
+              <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+                {(['grok', 'chatgpt'] as const).map((p) => {
+                  const active = media.imageProvider === p;
+                  return (
+                    <button
+                      key={p}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onMediaChange({ imageProvider: p })}
+                      title={
+                        p === 'chatgpt'
+                          ? 'ChatGPT — ดีกว่าเมื่อรวมตัวละคร + สินค้าในภาพเดียว'
+                          : 'Grok — เร็วกว่า'
+                      }
+                      className={
+                        'rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ' +
+                        (active
+                          ? 'bg-white text-violet-700 shadow-sm'
+                          : 'text-slate-500 hover:text-slate-700')
+                      }
+                    >
+                      {p === 'grok' ? 'Grok' : 'ChatGPT'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
             <Button
               size="sm"
