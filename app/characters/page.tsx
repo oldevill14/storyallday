@@ -246,6 +246,7 @@ function CharacterSheetModal({
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
+  const [engine, setEngine] = useState<'chatgpt' | 'grok'>('chatgpt');
 
   const generate = async () => {
     if (!character.refImage) return;
@@ -256,7 +257,7 @@ function CharacterSheetModal({
       const res = await fetch('/api/character-sheet', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ prompt, refImage: character.refImage }),
+        body: JSON.stringify({ prompt, refImage: character.refImage, engine }),
       });
       const data = (await res.json().catch(() => null)) as
         | { ok: true; dataUrl: string }
@@ -303,6 +304,27 @@ function CharacterSheetModal({
           {/* One-click auto generate (ChatGPT image-to-image via ai-flow) */}
           {character.refImage && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-600">เครื่องมือ:</span>
+                <div className="inline-flex rounded-lg bg-white p-0.5 ring-1 ring-slate-200">
+                  {(['chatgpt', 'grok'] as const).map((e) => (
+                    <button
+                      key={e}
+                      type="button"
+                      onClick={() => setEngine(e)}
+                      disabled={generating}
+                      className={
+                        'rounded-md px-2.5 py-1 text-xs font-semibold transition-colors disabled:opacity-50 ' +
+                        (engine === e
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-slate-500 hover:text-slate-700')
+                      }
+                    >
+                      {e === 'chatgpt' ? 'ChatGPT · ละเอียด' : 'Grok · เร็ว'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={generate}
@@ -315,13 +337,15 @@ function CharacterSheetModal({
                   </>
                 ) : (
                   <>
-                    <Zap className="h-4 w-4" /> สร้าง Character Sheet อัตโนมัติ (ChatGPT)
+                    <Zap className="h-4 w-4" /> สร้าง Character Sheet อัตโนมัติ (
+                    {engine === 'grok' ? 'Grok' : 'ChatGPT'})
                   </>
                 )}
               </button>
               <p className="mt-2 text-xs text-emerald-800">
-                ปุ่มเดียวจบ — ส่งรูป ref + prompt เข้า ChatGPT ให้อัตโนมัติ · ต้องรันแอปแบบ local-server +{' '}
-                <code className="font-mono">ai-flow login chatgpt</code> บนเครื่องนี้ก่อน
+                ปุ่มเดียวจบ — ส่งรูป ref + prompt เข้า {engine === 'grok' ? 'Grok' : 'ChatGPT'}{' '}
+                ให้อัตโนมัติ · ต้องรันแอปแบบ local-server +{' '}
+                <code className="font-mono">ai-flow login {engine}</code> บนเครื่องนี้ก่อน
               </p>
               {genError && (
                 <p className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">

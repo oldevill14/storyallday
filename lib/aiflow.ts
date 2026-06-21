@@ -136,18 +136,26 @@ async function dataUrlToTempFile(dataUrl: string): Promise<string> {
 }
 
 /**
- * Generate an image FROM a reference image (image-to-image) via ai-flow's
- * `image-ref` (ChatGPT /images). Writes the ref to a temp file, runs the CLI,
- * returns the produced file path. Serialized like every other ai-flow call.
+ * Generate an image FROM a reference image (image-to-image) via ai-flow.
+ *   engine 'chatgpt' → `image-ref`      (ChatGPT /images → PNG, detailed)
+ *   engine 'grok'    → `grok-image-ref` (Grok Imagine → JPG, faster)
+ * Writes the ref to a temp file, runs the CLI, returns the produced file path.
+ * Serialized like every other ai-flow call.
  */
-export function runAiFlowImageRef(prompt: string, refDataUrl: string): Promise<string> {
+export function runAiFlowImageRef(
+  prompt: string,
+  refDataUrl: string,
+  engine: 'chatgpt' | 'grok' = 'chatgpt',
+): Promise<string> {
   return enqueue(async () => {
     const refPath = await dataUrlToTempFile(refDataUrl);
+    const sub = engine === 'grok' ? 'grok-image-ref' : 'image-ref';
+    const ext = engine === 'grok' ? 'jpg' : 'png';
     const id = `${Date.now()}_${counter++}`;
-    const outPath = path.join(os.tmpdir(), `saf_sheet_${id}.png`);
+    const outPath = path.join(os.tmpdir(), `saf_sheet_${id}.${ext}`);
     try {
       const { stdout, stderr } = await execAiFlow(
-        ['image-ref', prompt, refPath, outPath],
+        [sub, prompt, refPath, outPath],
         300_000,
       );
       if (await fileExists(outPath)) return outPath;

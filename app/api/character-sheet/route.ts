@@ -20,7 +20,7 @@ function json(data: unknown, status = 200) {
   });
 }
 
-function friendlyError(raw: string): string {
+function friendlyError(raw: string, engine: 'chatgpt' | 'grok'): string {
   const lower = raw.toLowerCase();
   if (
     lower.includes('not ready') ||
@@ -29,7 +29,7 @@ function friendlyError(raw: string): string {
     lower.includes('login') ||
     lower.includes('not logged in')
   ) {
-    return 'เซสชัน ChatGPT ยังไม่ล็อกอิน — รัน: ai-flow login chatgpt บนเครื่องนี้ก่อน';
+    return `เซสชัน ${engine} ยังไม่ล็อกอิน — รัน: ai-flow login ${engine} บนเครื่องนี้ก่อน`;
   }
   if (lower.includes('timeout') || raw.includes('หมดเวลา')) {
     return 'สร้าง Character Sheet ไม่ทันเวลา — ลองใหม่ หรือเช็กหน้าต่าง ChatGPT';
@@ -39,7 +39,7 @@ function friendlyError(raw: string): string {
 }
 
 export async function POST(req: Request) {
-  let body: { prompt?: unknown; refImage?: unknown };
+  let body: { prompt?: unknown; refImage?: unknown; engine?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -48,17 +48,18 @@ export async function POST(req: Request) {
 
   const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
   const refImage = typeof body.refImage === 'string' ? body.refImage : '';
+  const engine: 'chatgpt' | 'grok' = body.engine === 'grok' ? 'grok' : 'chatgpt';
   if (!prompt) return json({ ok: false, error: 'ไม่มี prompt' }, 400);
   if (!refImage.startsWith('data:image/')) {
     return json({ ok: false, error: 'ต้องมีรูปอ้างอิงก่อน — อัปโหลดรูปในตัวละครก่อนสร้าง Sheet' }, 400);
   }
 
   try {
-    const outPath = await runAiFlowImageRef(prompt, refImage);
+    const outPath = await runAiFlowImageRef(prompt, refImage, engine);
     const dataUrl = await fileToDataUrlAndUnlink(outPath);
     return json({ ok: true, dataUrl });
   } catch (e) {
     const raw = e instanceof Error ? e.message : String(e);
-    return json({ ok: false, error: friendlyError(raw) }, 502);
+    return json({ ok: false, error: friendlyError(raw, engine) }, 502);
   }
 }
