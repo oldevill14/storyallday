@@ -149,8 +149,9 @@ export function runAiFlowImageRef(
 ): Promise<string> {
   return enqueue(async () => {
     const list = (Array.isArray(refDataUrls) ? refDataUrls : [refDataUrls]).filter(Boolean);
-    // ChatGPT accepts multiple reference images (e.g. character + product);
-    // Grok supports one — the CLI uses the first when several are passed.
+    // Both engines accept multiple reference images (e.g. character + product):
+    // refPaths.join(',') passes all of them and the CLI attaches each
+    // (image-ref and grok-image-ref both keep every comma-separated ref).
     const refPaths = await Promise.all(list.map(dataUrlToTempFile));
     const sub = engine === 'grok' ? 'grok-image-ref' : 'image-ref';
     const ext = engine === 'grok' ? 'jpg' : 'png';

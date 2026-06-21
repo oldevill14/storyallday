@@ -48,7 +48,7 @@ export async function callAI(
  */
 export function humanizeAIError(msg: string): string {
   const m = (msg || '').toLowerCase();
-  if (/insufficient_quota|exceeded your current quota|check your plan|billing|\bquota\b/.test(m)) {
+  if (/insufficient_quota|exceeded your (current )?quota|check your plan and billing|billing (details|hard limit)|quota (exceeded|reached)/.test(m)) {
     return 'บัญชีของผู้ให้บริการนี้เครดิต/โควต้าหมด หรือยังไม่ได้ตั้งค่าการเรียกเก็บเงิน (billing) — เติมเครดิตในบัญชีผู้ให้บริการก่อน แล้วลองใหม่ หรือสลับไปใช้ผู้ให้บริการอื่นที่พร้อมใช้งาน (เช่น GLM z.ai, OpenRouter โมเดลฟรี, Gemini)';
   }
   if (/invalid[_ ]api[_ ]key|incorrect api key|invalid authentication|unauthorized|\b401\b/.test(m)) {

@@ -189,6 +189,9 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     setGenError(null);
     try {
       const title = form.title.trim();
+      // CLI providers (claude -p / codex exec / ollama) receive text only — the
+      // image is dropped in /api/ai — so never claim an image is attached.
+      const canVision = settings.provider !== 'cli';
       const kind = isSales
         ? 'คลิปขายของแนวตั้ง (ละครสั้นที่ปิดการขายอย่างเป็นธรรมชาติ)'
         : 'ละครสั้นแนวตั้ง';
@@ -200,7 +203,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
         `ช่วยคิด "หัวข้อ/แนวคิด" สำหรับ${kind} ความยาว 3-5 ประโยค เป็นภาษาไทย`,
         title ? `อ้างอิงจากชื่อเรื่อง: "${title}" (ให้สอดคล้องกับชื่อนี้)` : '',
         productLine,
-        isSales && form.productImage
+        isSales && canVision && form.productImage
           ? 'มี "รูปสินค้า" แนบมาด้วย — ดูรูปแล้วนำลักษณะ/ประเภท/จุดเด่นของสินค้าที่เห็นมาใช้คิดหัวข้อ'
           : '',
         'ระบุ: ตัวละครหลัก (ผู้ใหญ่), อารมณ์/โทน, จุดพลิกของเรื่อง และฉากจบสั้นๆ',
@@ -210,7 +213,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
         .filter(Boolean)
         .join('\n');
       const text = await callAI(
-        { prompt, image: isSales ? form.productImage : undefined },
+        { prompt, image: isSales && canVision ? form.productImage : undefined },
         settings,
       );
       setForm((f) => ({ ...f, topic: text.trim() }));
@@ -246,6 +249,17 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
         });
       }
       setMedia(fresh);
+      // Non-blocking notice: the model occasionally under-delivers the requested
+      // episode/scene counts. The output is still usable, so just inform the user.
+      const gotEps = parsed.episodes.length;
+      const sceneShort = parsed.episodes.some(
+        (e) => e.scenes.length < form.scenesPerEpisode,
+      );
+      if (gotEps !== form.episodeCount || sceneShort) {
+        setGenError(
+          `AI สร้างได้ ${gotEps} ตอน (ขอ ${form.episodeCount} ตอน ฉากละ ${form.scenesPerEpisode}) — ใช้ผลลัพธ์นี้ต่อได้เลย หรือกด “สร้างเรื่อง” อีกครั้งเพื่อลองให้ครบ`,
+        );
+      }
     } catch (e) {
       setGenError(e instanceof Error ? e.message : 'เกิดข้อผิดพลาดในการสร้างเรื่อง');
     } finally {
@@ -380,9 +394,14 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
         .toString(36)
         .slice(2, 7)}`;
       const ref = doc(collection(db, 'users', user.uid, colName), id);
+      // Don't persist the raw base64 product image — a large photo plus a full
+      // scene grid can push the doc past Firestore's ~1 MiB limit (it's only a
+      // thumbnail; scene media isn't saved here either).
+      const formToSave = { ...form };
+      delete formToSave.productImage;
       await setDoc(ref, {
         mode,
-        form,
+        form: formToSave,
         drama,
         cast: selectedCharacterIds,
         createdAt: new Date().toISOString(),
@@ -391,7 +410,13 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
       setSavedNote(`บันทึกแล้ว: “${drama.title}”`);
       void refreshSaved(user.uid);
     } catch (e) {
-      setSavedNote(e instanceof Error ? e.message : 'บันทึกไม่สำเร็จ');
+      const raw = e instanceof Error ? e.message : '';
+      const tooBig = /longer than|exceeds the maximum|maximum.*size|1048487|too large/i.test(raw);
+      setSavedNote(
+        tooBig
+          ? 'บันทึกไม่สำเร็จ: ข้อมูลโปรเจกต์ใหญ่เกินกำหนด (เกิน 1MB) — ลองลดจำนวนตอน/ฉาก แล้วบันทึกใหม่'
+          : raw || 'บันทึกไม่สำเร็จ',
+      );
     } finally {
       setSaving(false);
     }

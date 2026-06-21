@@ -106,7 +106,19 @@ export function buildUserPrompt(form: StudioForm, ctx?: CreativeContext): string
     ? `ชื่อเรื่อง (ถ้ามีให้ใช้เป็นแนวทาง): ${form.title.trim()}`
     : 'ชื่อเรื่อง: (ให้คุณตั้งให้)';
 
-  return `สร้างบทละครสั้นแนวตั้ง (คลิปขายของ) จากข้อมูลนี้
+  // The header must match the mode: in drama mode ctx carries no sales fields
+  // (creativeCtx returns only { cast }/undefined), so presence of any sales
+  // field is a reliable signal that this is a sales clip.
+  const isSales = !!(
+    ctx?.salesStyle ||
+    ctx?.productName?.trim() ||
+    ctx?.productDetail?.trim()
+  );
+  const header = isSales
+    ? 'สร้างบทคลิปขายของแนวตั้ง (ละครสั้นที่ปิดการขายอย่างเป็นธรรมชาติ) จากข้อมูลนี้'
+    : 'สร้างบทละครสั้นแนวตั้ง จากข้อมูลนี้';
+
+  return `${header}
 
 ${titleLine}
 หัวข้อ/แนวคิด:
