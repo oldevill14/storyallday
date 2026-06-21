@@ -135,9 +135,8 @@ export function StoryForm({
       </div>
 
       {salesMode && (
-        <>
-      {/* Product to sell */}
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+        {/* Product to sell */}
         <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
           <Package className="h-4 w-4 text-violet-600" /> สินค้าที่จะขาย{' '}
           <span className="font-normal text-slate-400">(ไม่บังคับ)</span>
@@ -191,8 +190,9 @@ export function StoryForm({
           </p>
         </div>
       </div>
+      )}
 
-      {/* Cast (reusable characters) */}
+      {/* Cast (reusable characters) — available in both โหมด */}
       <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
         <div className="mb-2 flex items-center justify-between">
           <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
@@ -235,8 +235,6 @@ export function StoryForm({
           </div>
         )}
       </div>
-        </>
-      )}
 
       {/* Counts */}
       <div className="flex flex-wrap gap-6">

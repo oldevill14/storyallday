@@ -119,15 +119,18 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
 
   const hasKey = settings.apiKey.trim().length > 0;
 
-  // Product + cast context — only in sales mode (drama mode = plain).
+  // Cast applies in BOTH modes; product + sales style only in sales mode.
   const creativeCtx = (): CreativeContext | undefined => {
-    if (!isSales) return undefined;
+    const cast = characters
+      .filter((c) => selectedCharacterIds.includes(c.id))
+      .map((c) => characterPromptBlock(c));
+    if (!isSales) {
+      return cast.length ? { cast } : undefined;
+    }
     return {
       productName: form.productName,
       productDetail: form.productDetail,
-      cast: characters
-        .filter((c) => selectedCharacterIds.includes(c.id))
-        .map((c) => characterPromptBlock(c)),
+      cast,
       salesStyle: {
         label: SALES_STYLE_META[form.salesStyle].label,
         instruction: SALES_STYLE_META[form.salesStyle].instruction,
@@ -310,7 +313,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
         mode,
         form,
         drama,
-        cast: isSales ? selectedCharacterIds : [],
+        cast: selectedCharacterIds,
         createdAt: new Date().toISOString(),
         savedAt: serverTimestamp(),
       });
