@@ -38,25 +38,54 @@ import {
   type Unsubscribe,
 } from 'firebase/firestore';
 import type { User } from 'firebase/auth';
-import type { AISettings, Angle, Brand, Post } from './types';
+import type {
+  AISettings,
+  Angle,
+  Brand,
+  Membership,
+  Post,
+  Provider,
+  ProviderConfig,
+  Role,
+} from './types';
+import { ALL_PROVIDERS, DEFAULT_MODEL } from './types';
 import { seedAngles, seedBrand, seedPosts } from './seed';
 import { auth, db } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
 const STORAGE_KEY = 'storyallday';
 
+/** Fresh per-provider config map — every provider with its default model. */
+function emptyKeys(): Record<Provider, ProviderConfig> {
+  return ALL_PROVIDERS.reduce((acc, p) => {
+    acc[p] = { apiKey: '', model: DEFAULT_MODEL[p], baseUrl: '' };
+    return acc;
+  }, {} as Record<Provider, ProviderConfig>);
+}
+
 const defaultSettings: AISettings = {
   provider: 'zai',
   apiKey: '',
   model: 'glm-4.6',
   baseUrl: '',
+  keys: emptyKeys(),
 };
+
+/** The signed-in account's identity + access fields (from their user doc). */
+export type MeState = {
+  uid: string;
+  email: string;
+  role: Role;
+  membership: Membership | null;
+} | null;
 
 export type StoreState = {
   settings: AISettings;
   brand: Brand;
   angles: Angle[];
   posts: Post[];
+  /** Current user's role/membership. null while signed out or pre-snapshot. */
+  me: MeState;
 
   // actions
   setSettings: (settings: Partial<AISettings>) => void;
@@ -75,8 +104,21 @@ export type StoreState = {
 /** Current signed-in uid, or null. Tracked by the auth listener below. */
 let currentUid: string | null = null;
 
+/** Merge a partial update into `me` (two listeners feed it: users + memberships). */
+function updateMe(uid: string, patch: Partial<NonNullable<MeState>>) {
+  const cur = useStore.getState().me;
+  const base =
+    cur && cur.uid === uid
+      ? cur
+      : { uid, email: auth.currentUser?.email ?? '', role: 'member' as Role, membership: null };
+  useStore.setState({ me: { ...base, ...patch } });
+}
+
 function userDocRef(uid: string) {
   return doc(db, 'users', uid);
+}
+function membershipDocRef(uid: string) {
+  return doc(db, 'memberships', uid);
 }
 function postsColRef(uid: string) {
   return collection(db, 'users', uid, 'posts');
@@ -101,10 +143,39 @@ export const useStore = create<StoreState>()(
       brand: seedBrand,
       angles: seedAngles,
       posts: seedPosts,
+      me: null,
 
       // settings stays local (persisted) — no Firestore.
-      setSettings: (settings) =>
-        set((s) => ({ settings: { ...s.settings, ...settings } })),
+      // Per-provider aware: writes the (post-patch) active config into
+      // keys[provider] so switching providers never clobbers another's key.
+      setSettings: (patch) =>
+        set((s) => {
+          const cur = s.settings;
+          const keys = cur.keys ?? emptyKeys();
+          const provider = patch.provider ?? cur.provider;
+          const switching = provider !== cur.provider;
+          const saved =
+            keys[provider] ?? {
+              apiKey: '',
+              model: DEFAULT_MODEL[provider],
+              baseUrl: '',
+            };
+          // Baseline = the target provider's saved config when switching,
+          // otherwise the current active values.
+          const baseApiKey = switching ? saved.apiKey : cur.apiKey;
+          const baseModel = switching ? saved.model : cur.model;
+          const baseBaseUrl = switching
+            ? saved.baseUrl ?? ''
+            : cur.baseUrl ?? '';
+          const apiKey = patch.apiKey ?? baseApiKey;
+          const model = patch.model ?? baseModel;
+          const baseUrl = patch.baseUrl ?? baseBaseUrl;
+          const nextKeys = {
+            ...keys,
+            [provider]: { apiKey, model, baseUrl },
+          };
+          return { settings: { provider, apiKey, model, baseUrl, keys: nextKeys } };
+        }),
 
       // brand → users/{uid} doc, field `brand`. Optimistic local merge, then
       // persist to Firestore (snapshot will reconcile).
@@ -169,12 +240,39 @@ export const useStore = create<StoreState>()(
       name: STORAGE_KEY,
       storage: createJSONStorage(() => localStorage),
       skipHydration: true,
-      version: 2,
+      version: 3,
       // ONLY settings is persisted to localStorage now. brand/posts/angles
       // come from Firestore (so we never stash app data on disk).
       partialize: (s) => ({
         settings: s.settings,
       }),
+      // v2 → v3: the old shape had a single apiKey/model/baseUrl. Carry it into
+      // keys[activeProvider] so no saved key is ever lost on upgrade.
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as { settings?: Partial<AISettings> };
+        const old = (p.settings ?? {}) as Partial<AISettings>;
+        const provider = (old.provider as Provider) ?? 'zai';
+        const keys = emptyKeys();
+        if (version < 3) {
+          keys[provider] = {
+            apiKey: old.apiKey ?? '',
+            model: old.model ?? DEFAULT_MODEL[provider],
+            baseUrl: old.baseUrl ?? '',
+          };
+        } else if (old.keys) {
+          Object.assign(keys, old.keys);
+        }
+        const active = keys[provider];
+        return {
+          settings: {
+            provider,
+            apiKey: active.apiKey,
+            model: active.model,
+            baseUrl: active.baseUrl ?? '',
+            keys,
+          },
+        } as Partial<StoreState>;
+      },
     }
   )
 );
@@ -246,25 +344,28 @@ export function useHydrated(): boolean {
 // --- Auth → Firestore wiring -------------------------------------------------
 
 let unsubBrand: Unsubscribe | null = null;
+let unsubMembership: Unsubscribe | null = null;
 let unsubPosts: Unsubscribe | null = null;
 let unsubAngles: Unsubscribe | null = null;
 
 // Track first-snapshot arrival per collection so dataResolved flips only once
-// all three are in for a signed-in user.
+// all of them are in for a signed-in user.
 let gotBrandSnap = false;
+let gotMembershipSnap = false;
 let gotPostsSnap = false;
 let gotAnglesSnap = false;
 
 function teardownUserSync() {
   unsubBrand?.();
+  unsubMembership?.();
   unsubPosts?.();
   unsubAngles?.();
-  unsubBrand = unsubPosts = unsubAngles = null;
-  gotBrandSnap = gotPostsSnap = gotAnglesSnap = false;
+  unsubBrand = unsubMembership = unsubPosts = unsubAngles = null;
+  gotBrandSnap = gotMembershipSnap = gotPostsSnap = gotAnglesSnap = false;
 }
 
 function maybeMarkDataResolved() {
-  if (gotBrandSnap && gotPostsSnap && gotAnglesSnap) {
+  if (gotBrandSnap && gotMembershipSnap && gotPostsSnap && gotAnglesSnap) {
     dataResolved = true;
     recomputeHydrated();
   }
@@ -282,6 +383,7 @@ function handleAuthChange(user: User | null) {
       brand: seedBrand,
       angles: seedAngles,
       posts: seedPosts,
+      me: null,
     });
     // Data layer is "resolved" for the signed-out state.
     dataResolved = true;
@@ -289,7 +391,12 @@ function handleAuthChange(user: User | null) {
     return;
   }
 
-  // New sign-in: data not resolved until first snapshots land.
+  // New sign-in: data not resolved until first snapshots land. Set a provisional
+  // `me` immediately so the access gate knows the email (super-admin check works
+  // before the Firestore snapshot fills role/membership).
+  useStore.setState({
+    me: { uid: user.uid, email: user.email ?? '', role: 'member', membership: null },
+  });
   dataResolved = false;
   recomputeHydrated();
 
@@ -314,8 +421,19 @@ async function seedIfEmpty(uid: string): Promise<void> {
       getDocs(anglesColRef(uid)),
     ]);
 
+    const email = auth.currentUser?.email ?? '';
+    const now = new Date().toISOString();
     const batch = writeBatch(db);
-    batch.set(userDocRef(uid), { brand: seedBrand, seededAt: new Date().toISOString() });
+    // New accounts start with NO membership doc → blocked until an admin
+    // activates them (creates memberships/{uid}). role/membership are NEVER
+    // written here — they live in the admin-only `memberships` collection. The
+    // super-admin is recognized by email, so it needs no seeded role.
+    batch.set(userDocRef(uid), {
+      brand: seedBrand,
+      email,
+      createdAt: now,
+      seededAt: now,
+    });
     if (postsSnap.empty) {
       for (const p of seedPosts) batch.set(doc(postsColRef(uid), p.id), p);
     }
@@ -333,16 +451,42 @@ function attachUserSync(uid: string) {
   // If the uid changed again mid-flight, bail (a newer handleAuthChange runs).
   if (currentUid !== uid) return;
 
+  // users/{uid}: member-owned (brand + email). NO role/membership here.
   unsubBrand = onSnapshot(
     userDocRef(uid),
     (snap) => {
-      const data = snap.data() as { brand?: Brand } | undefined;
+      const data = snap.data() as { brand?: Brand; email?: string } | undefined;
       useStore.setState({ brand: data?.brand ?? seedBrand });
+      updateMe(uid, { email: auth.currentUser?.email ?? data?.email ?? '' });
       gotBrandSnap = true;
       maybeMarkDataResolved();
     },
     () => {
       gotBrandSnap = true;
+      maybeMarkDataResolved();
+    }
+  );
+
+  // memberships/{uid}: admin-controlled (role + subscription window). Members
+  // can read their own but can NEVER write it (firestore.rules). Drives access.
+  unsubMembership = onSnapshot(
+    membershipDocRef(uid),
+    (snap) => {
+      const data = snap.data() as
+        | { role?: Role; membership?: Membership }
+        | undefined;
+      updateMe(uid, {
+        role: (data?.role as Role) ?? 'member',
+        membership: data?.membership ?? null,
+      });
+      gotMembershipSnap = true;
+      maybeMarkDataResolved();
+    },
+    () => {
+      // Permission/offline error → treat as no membership (blocked), but don't
+      // hang hydration.
+      updateMe(uid, { role: 'member', membership: null });
+      gotMembershipSnap = true;
       maybeMarkDataResolved();
     }
   );

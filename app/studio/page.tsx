@@ -267,10 +267,10 @@ export default function StudioPage() {
       <PageHeader
         eyebrow={
           <Badge color="violet" icon={<Clapperboard className="h-3 w-3" />}>
-            WorkD-Cine
+            สร้างคลิปขายของ
           </Badge>
         }
-        title="สตูดิโอละครสั้น"
+        title="สร้างคลิปขายของ"
         subtitle="แตกหัวข้อ → เรื่อง → ตอน/ฉาก → prompt แล้วเจนภาพ/วิดีโอทีละฉาก"
         action={
           drama ? (

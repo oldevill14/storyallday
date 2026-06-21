@@ -1,9 +1,51 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ผู้ใช้เข้าถึง/แก้ไขได้เฉพาะข้อมูลใต้ users/{ตัวเอง} เท่านั้น
-    match /users/{uid}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+
+    function authed() {
+      return request.auth != null;
+    }
+
+    // codename.poker@gmail.com is ALWAYS super-admin — enforced via the token's
+    // email (mirrors SUPER_ADMIN_EMAILS in lib/membership.ts).
+    function isSuper() {
+      return authed() && request.auth.token.email == 'codename.poker@gmail.com';
+    }
+
+    // Role-based admin: the caller's role lives in their (admin-write-only)
+    // memberships doc. Members can't forge this — they have NO write access to
+    // the memberships collection at all (see below).
+    function isRoleAdmin() {
+      return authed()
+        && exists(/databases/$(database)/documents/memberships/$(request.auth.uid))
+        && get(/databases/$(database)/documents/memberships/$(request.auth.uid)).data.get('role', 'member') == 'admin';
+    }
+
+    function isAdmin() {
+      return isSuper() || isRoleAdmin();
+    }
+
+    function isOwner(uid) {
+      return authed() && request.auth.uid == uid;
+    }
+
+    // App data the MEMBER owns: brand (on the doc) + posts/angles (subcollections).
+    // No privileged fields live here, so a simple owner/admin rule is safe —
+    // there is nothing a member could escalate by writing their own doc.
+    match /users/{uid} {
+      allow read, write: if isOwner(uid) || isAdmin();
+      match /{document=**} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    // Access control the ADMIN owns: role + subscription window. The trust
+    // boundary is the collection itself — members may READ their own record (to
+    // see their status) but can NEVER write it. Only admins write. This removes
+    // any reliance on fragile field-level guards.
+    match /memberships/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow write: if isAdmin();
     }
   }
 }

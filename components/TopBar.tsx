@@ -3,15 +3,21 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Bell, ChevronDown, Plus, Sparkles, User, LogOut } from 'lucide-react';
+import { Bell, ChevronDown, Plus, Sparkles, User, LogOut, UserCog } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { useAuth } from '@/lib/auth';
+import { useStore } from '@/lib/store';
+import { accessState, isAdminProfile } from '@/lib/membership';
 
 export function TopBar() {
   const router = useRouter();
   const { user, signOutUser } = useAuth();
+  const me = useStore((s) => s.me);
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const amAdmin = !!me && isAdminProfile(me);
+  const access = me ? accessState(me) : null;
 
   // Close the account menu on outside click.
   useEffect(() => {
@@ -102,7 +108,28 @@ export function TopBar() {
                   {displayName}
                 </div>
                 <div className="truncate text-xs text-slate-400">{email}</div>
+                {access && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                    {access.reason === 'admin'
+                      ? '👑 แอดมิน · ไม่จำกัด'
+                      : access.allowed && access.daysLeft !== null
+                      ? `✅ ใช้งานได้ · เหลือ ${access.daysLeft} วัน`
+                      : access.allowed
+                      ? '✅ ใช้งานได้'
+                      : '⛔ ยังไม่เปิดใช้งาน'}
+                  </div>
+                )}
               </div>
+              {amAdmin && (
+                <Link
+                  href="/admin"
+                  onClick={() => setOpen(false)}
+                  className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                >
+                  <UserCog className="h-4 w-4 text-violet-600" />
+                  จัดการสมาชิก
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={handleSignOut}

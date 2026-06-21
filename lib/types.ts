@@ -4,14 +4,88 @@
 /** AI provider the proxy can call. */
 export type Provider = 'openai' | 'anthropic' | 'gemini' | 'zai' | 'openrouter';
 
-/** Configurable AI connection settings (stored in the zustand store). */
-export type AISettings = {
-  provider: Provider;
+// --- Membership / access control --------------------------------------------
+
+/** Role of a signed-in account. Admins manage members' access time. */
+export type Role = 'admin' | 'member';
+
+/** Subscription plan id. */
+export type PlanId = 'monthly' | 'yearly';
+
+/** Admin-controlled subscription status. (Absence of membership = not activated.) */
+export type MembershipStatus = 'active' | 'suspended';
+
+/**
+ * A member's subscription window. Set ONLY by an admin (Firestore rules forbid
+ * members from writing this on their own doc). `null` start/expires = open-ended
+ * (rare; admin normally sets both).
+ */
+export type Membership = {
+  plan: PlanId | null;
+  status: MembershipStatus;
+  /** ISO date — access begins. */
+  startAt: string | null;
+  /** ISO date — access ends (inclusive day). */
+  expiresAt: string | null;
+  /** Free-text admin note. */
+  note?: string;
+  /** ISO timestamp of the last admin change. */
+  updatedAt?: string;
+  /** Email of the admin who last changed it. */
+  updatedBy?: string;
+};
+
+/** A user row as seen by the admin member-management screen. */
+export type MemberProfile = {
+  uid: string;
+  email: string;
+  role: Role;
+  membership: Membership | null;
+  /** ISO timestamp of account creation. */
+  createdAt: string;
+};
+
+/** Per-provider connection config — each provider keeps its OWN key/model/baseUrl. */
+export type ProviderConfig = {
   apiKey: string;
   model: string;
   /** Optional override for the provider base URL (proxy/self-host/gateway). */
   baseUrl?: string;
 };
+
+/**
+ * Configurable AI connection settings (stored in the zustand store).
+ *
+ * `apiKey/model/baseUrl` MIRROR the currently-active provider's config so every
+ * existing call site (`settings.apiKey`, etc.) keeps working unchanged.
+ * `keys` is the real per-provider source of truth — switching providers no
+ * longer overwrites another provider's key. Always keyed by every Provider.
+ */
+export type AISettings = {
+  provider: Provider;
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+  keys: Record<Provider, ProviderConfig>;
+};
+
+/** Built-in default model id per provider (used to seed empty configs). */
+export const DEFAULT_MODEL: Record<Provider, string> = {
+  openai: 'gpt-4o-mini',
+  anthropic: 'claude-3-5-haiku-latest',
+  gemini: 'gemini-2.0-flash',
+  zai: 'glm-4.6',
+  openrouter: 'cohere/north-mini-code:free',
+};
+
+/** Every provider id, in display order. */
+export const ALL_PROVIDERS: Provider[] = [
+  'openai',
+  'anthropic',
+  'gemini',
+  'zai',
+  'openrouter',
+];
 
 /** The page owner's brand profile — feeds prompts. */
 export type Brand = {

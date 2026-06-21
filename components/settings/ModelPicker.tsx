@@ -1,36 +1,47 @@
 'use client';
 
-// components/settings/ModelPicker.tsx — searchable OpenRouter model picker with
-// inline pricing. Fetches /api/openrouter-models on mount, lets the user filter
-// by ฟรี / คุ้มราคา / ทั้งหมด, search by name/id, and pick a model.
+// components/settings/ModelPicker.tsx — universal, searchable model picker with
+// inline pricing. Works for EVERY provider: it POSTs /api/models with the active
+// provider + key + baseUrl, then lets the user filter by ฟรี / คุ้มราคา / ทั้งหมด,
+// search by name/id, and pick a model.
+//
+// Gating: for key-required providers the parent passes `enabled` only once the
+// connection test has succeeded, so we never spam the provider with bad keys.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { AlertCircle, Check, Search } from 'lucide-react';
+import { AlertCircle, Check, KeyRound, Search } from 'lucide-react';
 import { Badge, Spinner } from '@/components/ui';
-import type { OpenRouterModel } from '@/app/api/openrouter-models/route';
+import type { Provider } from '@/lib/types';
+import type { ModelOption } from '@/app/api/models/route';
 
 export type ModelPickerProps = {
+  provider: Provider;
+  apiKey: string;
+  baseUrl?: string;
   /** Currently selected model id. */
   value: string;
   /** Called with the chosen model id when a row is clicked. */
   onChange: (id: string) => void;
+  /** When false, don't fetch yet (e.g. key-required provider, not tested). */
+  enabled: boolean;
+  /** Bump to force a refetch (e.g. right after a successful connection test). */
+  reloadToken?: number;
 };
 
 type FilterKey = 'all' | 'free' | 'value';
 
 type LoadState =
+  | { status: 'disabled' }
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ready'; models: OpenRouterModel[] };
+  | { status: 'ready'; models: ModelOption[] };
 
 /** Format a per-token USD price as "$/1M tokens" with 2-3 significant digits. */
 function formatPrice(perToken: number): string {
-  if (!Number.isFinite(perToken)) return 'แปรผัน';
-  if (perToken < 0) return 'แปรผัน'; // "-1" → variable / auto
+  if (!Number.isFinite(perToken) || perToken < 0) return '—';
   if (perToken === 0) return 'ฟรี';
   const perMillion = perToken * 1e6;
-  // 2-3 significant digits; trim trailing zeros for tidy display.
   const digits = perMillion >= 100 ? 0 : perMillion >= 1 ? 2 : 3;
   // Trim only fractional trailing zeros (and a bare trailing dot) — never the
   // zeros of an integer (e.g. "$150" must stay "$150", not become "$15").
@@ -49,15 +60,37 @@ function formatContext(n: number): string {
   return `ctx ${n}`;
 }
 
-export function ModelPicker({ value, onChange }: ModelPickerProps) {
-  const [state, setState] = useState<LoadState>({ status: 'loading' });
+export function ModelPicker({
+  provider,
+  apiKey,
+  baseUrl,
+  value,
+  onChange,
+  enabled,
+  reloadToken = 0,
+}: ModelPickerProps) {
+  const [state, setState] = useState<LoadState>({ status: 'disabled' });
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<FilterKey>('all');
 
+  // Read the latest key at fetch time WITHOUT making it an effect dependency —
+  // so typing the key char-by-char never triggers a fetch. Only provider /
+  // baseUrl / enabled / reloadToken changes do.
+  const apiKeyRef = useRef(apiKey);
+  apiKeyRef.current = apiKey;
+
   useEffect(() => {
+    if (!enabled) {
+      setState({ status: 'disabled' });
+      return;
+    }
     let alive = true;
     setState({ status: 'loading' });
-    fetch('/api/openrouter-models')
+    fetch('/api/models', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider, apiKey: apiKeyRef.current, baseUrl }),
+    })
       .then(async (res) => {
         const data = await res.json().catch(() => null);
         if (!res.ok || !Array.isArray(data)) {
@@ -66,7 +99,7 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
             `ดึงรายการโมเดลไม่สำเร็จ (HTTP ${res.status})`;
           throw new Error(msg);
         }
-        return data as OpenRouterModel[];
+        return data as ModelOption[];
       })
       .then((models) => {
         if (alive) setState({ status: 'ready', models });
@@ -75,28 +108,28 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
         if (alive)
           setState({
             status: 'error',
-            message:
-              e instanceof Error ? e.message : 'ดึงรายการโมเดลไม่สำเร็จ',
+            message: e instanceof Error ? e.message : 'ดึงรายการโมเดลไม่สำเร็จ',
           });
       });
     return () => {
       alive = false;
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider, baseUrl, enabled, reloadToken]);
 
   const models = state.status === 'ready' ? state.models : [];
 
-  // Per-filter counts (independent of the active filter / search).
   const counts = useMemo(() => {
     const free = models.filter((m) => m.free).length;
-    return { all: models.length, free, value: models.length - free };
+    const paid = models.filter((m) => m.pricingKnown && !m.free).length;
+    return { all: models.length, free, value: paid };
   }, [models]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = models.filter((m) => {
       if (filter === 'free') return m.free;
-      if (filter === 'value') return !m.free;
+      if (filter === 'value') return m.pricingKnown && !m.free;
       return true;
     });
     if (q) {
@@ -105,13 +138,15 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
           m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q)
       );
     }
-    // Sort: คุ้มราคา → cheapest paid first. ทั้งหมด → free first, then by price.
+    const priceOf = (m: ModelOption) =>
+      m.promptPrice < 0 ? Number.POSITIVE_INFINITY : m.promptPrice;
     if (filter === 'value') {
-      list = [...list].sort((a, b) => a.promptPrice - b.promptPrice);
+      list = [...list].sort((a, b) => priceOf(a) - priceOf(b));
     } else if (filter === 'all') {
       list = [...list].sort((a, b) => {
         if (a.free !== b.free) return a.free ? -1 : 1;
-        return a.promptPrice - b.promptPrice;
+        if (a.pricingKnown !== b.pricingKnown) return a.pricingKnown ? -1 : 1;
+        return priceOf(a) - priceOf(b);
       });
     }
     return list;
@@ -122,6 +157,20 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
     { key: 'value', label: 'คุ้มราคา', count: counts.value },
     { key: 'all', label: 'ทั้งหมด', count: counts.all },
   ];
+
+  // Disabled: key-required provider, not yet tested.
+  if (state.status === 'disabled') {
+    return (
+      <div className="flex items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+        <KeyRound className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+        <p className="text-sm text-slate-500">
+          ใส่ API Key แล้วกด{' '}
+          <span className="font-medium text-slate-700">“ทดสอบการเชื่อมต่อ”</span>{' '}
+          ระบบจะดึงรายการโมเดลที่ใช้ได้ของผู้ให้บริการนี้ขึ้นมาให้เลือกพร้อมราคา
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -238,9 +287,16 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
                           <Badge color="emerald" variant="soft">
                             ฟรี
                           </Badge>
+                        ) : !m.pricingKnown ? (
+                          <span className="text-[11px] text-slate-400">
+                            ดูราคาที่เว็บผู้ให้บริการ
+                          </span>
                         ) : (
                           <div className="leading-tight">
                             <div className="text-xs font-medium text-slate-700">
+                              {m.approx && (
+                                <span className="text-slate-400">≈ </span>
+                              )}
                               {formatPrice(m.promptPrice)}{' '}
                               <span className="font-normal text-slate-400">
                                 /1M (in)
@@ -258,6 +314,13 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
                 );
               })}
             </ul>
+          )}
+          {/* Approx-price disclaimer (curated providers). */}
+          {models.some((m) => m.approx) && (
+            <div className="border-t border-slate-100 px-3.5 py-2 text-[11px] text-slate-400">
+              ราคาที่ขึ้นต้นด้วย ≈ เป็นราคาโดยประมาณจากเรทมาตรฐานของผู้ให้บริการ
+              (API ไม่ได้คืนราคามาโดยตรง) — โปรดตรวจสอบราคาจริงที่เว็บผู้ให้บริการ
+            </div>
           )}
         </div>
       )}

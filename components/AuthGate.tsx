@@ -4,6 +4,9 @@ import { useEffect, type ReactNode } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Bot } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { useStore, useHydrated } from '@/lib/store';
+import { accessState } from '@/lib/membership';
+import { MembershipBlocked } from '@/components/MembershipBlocked';
 
 /**
  * Login gate. Mounted INSIDE <AuthProvider>, wrapping the whole app shell.
@@ -20,6 +23,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const hydrated = useHydrated();
+  const me = useStore((s) => s.me);
 
   const onLogin = pathname === '/login';
 
@@ -56,6 +61,34 @@ export function AuthGate({ children }: { children: ReactNode }) {
   // Protected routes: render only when signed in; otherwise nothing (redirecting).
   if (!user) {
     return null;
+  }
+
+  // Signed in but the user doc (role/membership) hasn't resolved yet → spinner,
+  // so we never flash the app to a blocked user or vice-versa.
+  if (!hydrated || !me) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-blue-600 text-white shadow-lg">
+          <Bot className="h-7 w-7" />
+        </div>
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-violet-600" />
+          กำลังตรวจสอบสิทธิ์การใช้งาน…
+        </div>
+      </div>
+    );
+  }
+
+  // Access control: admins always pass; members need an active, in-window plan.
+  const access = accessState(me);
+  if (!access.allowed) {
+    return (
+      <MembershipBlocked
+        reason={access.reason}
+        email={me.email}
+        expiresAt={access.expiresAt}
+      />
+    );
   }
 
   return <>{children}</>;

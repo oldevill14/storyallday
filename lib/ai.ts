@@ -2,13 +2,19 @@
 
 import type { AISettings, Angle, Brand } from './types';
 
+/** The connection fields callAI needs — a subset of AISettings (no `keys`). */
+export type AIConnection = Pick<
+  AISettings,
+  'provider' | 'apiKey' | 'model' | 'baseUrl'
+>;
+
 /**
  * Low-level call to the AI proxy. POSTs settings + a single user message and
  * returns the normalized text. Throws on { error } or network failure.
  */
 export async function callAI(
   opts: { system?: string; prompt: string },
-  settings: AISettings
+  settings: AIConnection
 ): Promise<string> {
   const res = await fetch('/api/ai', {
     method: 'POST',

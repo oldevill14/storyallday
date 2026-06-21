@@ -53,6 +53,9 @@ export default function SettingsPage() {
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [test, setTest] = useState<TestState>({ status: 'idle' });
+  // Bumped on a successful test → forces the model picker to (re)fetch the live
+  // list for the just-validated key.
+  const [reloadToken, setReloadToken] = useState(0);
 
   // Re-seed the draft from the store the moment persisted state hydrates in.
   // Adjusting state during render (with a prev-value tracker) avoids the
@@ -80,11 +83,27 @@ export default function SettingsPage() {
   };
 
   const selectProvider = (provider: Provider) => {
-    // Switch provider and snap the model to that provider's default.
-    setDraft((d) => ({ ...d, provider, model: defaultModelFor(provider) }));
+    // Load THIS provider's own saved config (key/model/baseUrl) so switching
+    // providers never shows another provider's key. Falls back to the provider
+    // default model when nothing is saved yet.
+    const saved = settings.keys?.[provider];
+    setDraft((d) => ({
+      ...d,
+      provider,
+      apiKey: saved?.apiKey ?? '',
+      model: saved?.model ?? defaultModelFor(provider),
+      baseUrl: saved?.baseUrl ?? '',
+    }));
     setSaved(false);
     setTest({ status: 'idle' });
   };
+
+  // The live model picker can fetch when: OpenRouter (public catalog) or zai
+  // (curated list) need no key, OR the connection test for the typed key passed.
+  const modelsEnabled =
+    draft.provider === 'openrouter' ||
+    draft.provider === 'zai' ||
+    test.status === 'ok';
 
   const dirty =
     draft.provider !== settings.provider ||
@@ -129,6 +148,8 @@ export default function SettingsPage() {
         status: 'ok',
         message: `เชื่อมต่อสำเร็จ! AI ตอบกลับว่า: "${reply}"`,
       });
+      // Key validated → (re)load the live model list for this provider.
+      setReloadToken((t) => t + 1);
     } catch (e) {
       setTest({
         status: 'error',
@@ -281,69 +302,64 @@ export default function SettingsPage() {
 
           {/* Model */}
           <div>
-            <label htmlFor="model" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
+            <label
+              htmlFor="model"
+              className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700"
+            >
               <Cpu className="h-3.5 w-3.5 text-slate-400" />
               โมเดล (Model)
+              <Badge color="violet" variant="soft">
+                {meta.label}
+              </Badge>
             </label>
+            <p className="mb-2 text-xs text-slate-500">
+              {modelsEnabled
+                ? 'เลือกจากโมเดลที่ใช้ได้จริงของผู้ให้บริการนี้ — แสดงราคาต่อ 1 ล้าน tokens (ถ้ามี)'
+                : 'รายการโมเดลจะดึงให้อัตโนมัติเมื่อ “ทดสอบการเชื่อมต่อ” สำเร็จ'}
+            </p>
 
-            {draft.provider === 'openrouter' ? (
-              <>
-                <p className="mb-2 text-xs text-slate-500">
-                  ค้นหาและเลือกโมเดลจาก OpenRouter — กรองตามราคา พร้อมราคาต่อ 1 ล้าน
-                  tokens
-                </p>
-                <ModelPicker
-                  value={draft.model}
-                  onChange={(id) => patch({ model: id })}
-                />
-                <p className="mt-2 text-xs text-slate-400">
-                  เลือกแล้ว:{' '}
-                  <span className="font-mono text-slate-600">
-                    {draft.model || '— ยังไม่ได้เลือก —'}
-                  </span>
-                </p>
-              </>
-            ) : (
-              <>
-                <input
-                  id="model"
-                  type="text"
-                  value={draft.model}
-                  onChange={(e) => patch({ model: e.target.value })}
-                  placeholder={meta.defaultModel}
-                  autoComplete="off"
-                  spellCheck={false}
-                  className={inputBase + ' font-mono'}
-                  list="model-suggestions"
-                />
-                <datalist id="model-suggestions">
-                  {meta.models.map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className="text-xs text-slate-400">แนะนำ:</span>
-                  {meta.models.map((m) => {
-                    const active = draft.model === m;
-                    return (
-                      <button
-                        key={m}
-                        type="button"
-                        onClick={() => patch({ model: m })}
-                        className={
-                          'rounded-full px-2.5 py-1 text-xs font-medium transition-colors ' +
-                          (active
-                            ? 'bg-violet-600 text-white'
-                            : 'bg-slate-100 text-slate-600 hover:bg-violet-50 hover:text-violet-700')
-                        }
-                      >
-                        {m}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
+            <ModelPicker
+              provider={draft.provider}
+              apiKey={draft.apiKey.trim()}
+              baseUrl={draft.baseUrl?.trim() || undefined}
+              value={draft.model}
+              onChange={(id) => patch({ model: id })}
+              enabled={modelsEnabled}
+              reloadToken={reloadToken}
+            />
+
+            {/* Manual override / offline fallback */}
+            <div className="mt-3">
+              <label
+                htmlFor="model"
+                className="mb-1 block text-xs font-medium text-slate-500"
+              >
+                หรือพิมพ์ชื่อโมเดลเอง
+              </label>
+              <input
+                id="model"
+                type="text"
+                value={draft.model}
+                onChange={(e) => patch({ model: e.target.value })}
+                placeholder={meta.defaultModel}
+                autoComplete="off"
+                spellCheck={false}
+                className={inputBase + ' font-mono'}
+                list="model-suggestions"
+              />
+              <datalist id="model-suggestions">
+                {meta.models.map((m) => (
+                  <option key={m} value={m} />
+                ))}
+              </datalist>
+            </div>
+
+            <p className="mt-2 text-xs text-slate-400">
+              เลือกแล้ว:{' '}
+              <span className="font-mono text-slate-600">
+                {draft.model || '— ยังไม่ได้เลือก —'}
+              </span>
+            </p>
           </div>
 
           {/* Base URL */}
