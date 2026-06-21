@@ -1,9 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import type { Platform } from '@/lib/types';
 import { useStore, useHydrated } from '@/lib/store';
+import { useConnections, type ChannelId } from '@/lib/connections';
 import {
   PageHeader,
   Card,
@@ -13,93 +13,43 @@ import {
   Mascot,
   Spinner,
 } from '@/components/ui';
-import { PlatformCard } from '@/components/connections/PlatformCard';
-import { ConnectModal } from '@/components/connections/ConnectModal';
+import { CHANNELS, ChannelIcon, getChannel } from '@/components/connections/channels';
+import { ConnectWizard } from '@/components/connections/ConnectWizard';
 import {
   Link2,
   Sparkles,
   CalendarClock,
   Send,
-  ShieldCheck,
   PlugZap,
-  Clock3,
-  CheckCheck,
+  CheckCircle2,
+  Circle,
+  Unlink,
+  MousePointerClick,
 } from 'lucide-react';
-
-type PlatformDef = {
-  platform: Platform;
-  name: string;
-  description: string;
-  benefits: string[];
-};
-
-const PLATFORMS: PlatformDef[] = [
-  {
-    platform: 'facebook',
-    name: 'Facebook',
-    description:
-      'เชื่อมต่อเพจ Facebook เพื่อให้ Story AI โพสต์คอนเทนต์ที่อนุมัติแล้วขึ้นเพจให้อัตโนมัติตามตารางที่จัดไว้',
-    benefits: [
-      'โพสต์ขึ้นเพจตามเวลาที่ตั้งไว้ ไม่ต้องก๊อปวางเอง',
-      'รองรับรูปภาพและแคปชั่นพร้อมแฮชแท็ก',
-    ],
-  },
-  {
-    platform: 'instagram',
-    name: 'Instagram',
-    description:
-      'เชื่อมต่อบัญชี Instagram (Business) เพื่อเผยแพร่ฟีดและภาพคารูเซลที่ Story AI สร้างให้โดยอัตโนมัติ',
-    benefits: [
-      'เผยแพร่ฟีด/คารูเซลตามแผนคอนเทนต์',
-      'จัดคิวโพสต์ในช่วงเวลาที่คนไทยมีปฏิสัมพันธ์สูง',
-    ],
-  },
-  {
-    platform: 'line',
-    name: 'LINE',
-    description:
-      'เชื่อมต่อ LINE Official Account เพื่อส่งบรอดแคสต์คอนเทนต์ถึงผู้ติดตามได้อย่างสะดวกในที่เดียว',
-    benefits: [
-      'ส่งบรอดแคสต์ถึงผู้ติดตามได้ทันที',
-      'จัดการคอนเทนต์ทุกแพลตฟอร์มจากหน้าจอเดียว',
-    ],
-  },
-];
 
 export default function ConnectionsPage() {
   const hydrated = useHydrated();
   const posts = useStore((s) => s.posts);
+  const connected = useConnections((s) => s.connected);
+  const connect = useConnections((s) => s.connect);
+  const disconnect = useConnections((s) => s.disconnect);
 
-  // MVP: connection status is mock-only (not in the persisted schema).
-  const [connections, setConnections] = useState<Record<Platform, boolean>>({
-    facebook: false,
-    instagram: false,
-    line: false,
-  });
-  const [modalPlatform, setModalPlatform] = useState<Platform | null>(null);
+  // localStorage-backed connections resolve on the client only.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  const [wizard, setWizard] = useState<ChannelId | null>(null);
 
   const connectedCount = useMemo(
-    () => Object.values(connections).filter(Boolean).length,
-    [connections]
+    () => CHANNELS.filter((c) => connected[c.id]).length,
+    [connected]
   );
-
-  // Posts waiting to go out once a real connection exists.
   const queuedCount = useMemo(
-    () =>
-      posts.filter((p) => p.status === 'scheduled' || p.status === 'pending')
-        .length,
+    () => posts.filter((p) => p.status === 'scheduled' || p.status === 'pending').length,
     [posts]
   );
 
-  const openConnect = (platform: Platform) => setModalPlatform(platform);
-
-  const disconnect = (platform: Platform) =>
-    setConnections((c) => ({ ...c, [platform]: false }));
-
-  const toggleMock = (platform: Platform) =>
-    setConnections((c) => ({ ...c, [platform]: !c[platform] }));
-
-  if (!hydrated) {
+  if (!hydrated || !mounted) {
     return (
       <div className="flex justify-center py-20">
         <Spinner label="กำลังโหลด…" />
@@ -116,12 +66,7 @@ export default function ConnectionsPage() {
           </Badge>
         }
         title="การเชื่อมต่อแพลตฟอร์ม"
-        subtitle="เชื่อมต่อช่องทางโซเชียลของคุณ แล้วให้ Story AI โพสต์ให้อัตโนมัติตามตารางที่จัดไว้"
-        action={
-          <Button variant="outline" icon={<ShieldCheck className="h-4 w-4" />} disabled>
-            จัดการสิทธิ์ (เร็วๆ นี้)
-          </Button>
-        }
+        subtitle="เชื่อมต่อช่องทางของคุณแบบกด “ถัดไป” ไปเรื่อยๆ — ใช้ง่าย ไม่ต้องมีความรู้ทางเทคนิค"
       />
 
       {/* Stats */}
@@ -129,9 +74,9 @@ export default function ConnectionsPage() {
         <StatCard
           icon={Link2}
           color="violet"
-          value={`${connectedCount}/3`}
+          value={`${connectedCount}/${CHANNELS.length}`}
           label="ช่องทางที่เชื่อมต่อ"
-          caption="Facebook · Instagram · LINE"
+          caption="FB · IG · LINE · TikTok · YouTube · Shopee"
         />
         <StatCard
           icon={CalendarClock}
@@ -149,22 +94,20 @@ export default function ConnectionsPage() {
         />
       </div>
 
-      {/* Mascot banner — explains auto-posting */}
+      {/* Banner */}
       <Card className="overflow-hidden bg-gradient-to-r from-violet-50 to-blue-50">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <Mascot size={56} className="shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex items-center gap-2">
-              <h2 className="text-lg font-bold text-slate-900">
-                เชื่อมแล้วโพสต์ได้อัตโนมัติ
-              </h2>
-              <Badge color="blue" icon={<Sparkles className="h-3 w-3" />}>
-                ออโต้
+              <h2 className="text-lg font-bold text-slate-900">เชื่อมง่ายแค่กด “ถัดไป”</h2>
+              <Badge color="blue" icon={<MousePointerClick className="h-3 w-3" />}>
+                3 ขั้นตอน
               </Badge>
             </div>
             <p className="text-sm leading-relaxed text-slate-600">
-              เมื่อเชื่อมต่อช่องทางแล้ว โพสต์ที่คุณกด “อนุมัติ” จะถูกส่งขึ้นแพลตฟอร์มตามวันและเวลาที่จัดไว้ในปฏิทินโพสต์โดยอัตโนมัติ
-              — ไม่ต้องก๊อปวางเอง ไม่พลาดช่วงเวลาทอง
+              เลือกช่องทางแล้วกด “เชื่อมต่อ” ระบบจะพาคุณทีละขั้น — เข้าสู่ระบบ → อนุญาตสิทธิ์ → เสร็จ
+              จากนั้นโพสต์ที่อนุมัติแล้วจะถูกส่งขึ้นช่องทางตามตารางให้อัตโนมัติ
             </p>
           </div>
           <Link href="/calendar" className="shrink-0">
@@ -175,83 +118,71 @@ export default function ConnectionsPage() {
         </div>
       </Card>
 
-      {/* Platform cards */}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        {PLATFORMS.map((p) => (
-          <PlatformCard
-            key={p.platform}
-            platform={p.platform}
-            name={p.name}
-            description={p.description}
-            benefits={p.benefits}
-            connected={connections[p.platform]}
-            onConnect={openConnect}
-            onDisconnect={disconnect}
-          />
-        ))}
+      {/* Channel cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {CHANNELS.map((c) => {
+          const isOn = !!connected[c.id];
+          return (
+            <Card key={c.id} hoverable className="flex flex-col">
+              <div className="flex items-center gap-3">
+                <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${c.iconBg} ring-1 ring-slate-100`}>
+                  <ChannelIcon id={c.id} size={32} />
+                </span>
+                <div>
+                  <div className="text-base font-bold text-slate-900">{c.name}</div>
+                  {isOn ? (
+                    <Badge color="emerald" icon={<CheckCircle2 className="h-3 w-3" />}>
+                      เชื่อมต่อแล้ว
+                    </Badge>
+                  ) : (
+                    <Badge color="slate" icon={<Circle className="h-3 w-3" />}>
+                      ยังไม่เชื่อมต่อ
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <p className="mt-3 text-sm font-medium text-slate-700">{c.tagline}</p>
+              <ul className="mt-2 space-y-1.5 text-sm text-slate-600">
+                {c.benefits.map((b) => (
+                  <li key={b} className="flex items-start gap-2">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-violet-500" />
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-5 pt-1">
+                {isOn ? (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    icon={<Unlink className="h-4 w-4" />}
+                    onClick={() => disconnect(c.id)}
+                  >
+                    ตัดการเชื่อมต่อ
+                  </Button>
+                ) : (
+                  <Button
+                    variant="gradient"
+                    className="w-full"
+                    icon={<Link2 className="h-4 w-4" />}
+                    onClick={() => setWizard(c.id)}
+                  >
+                    เชื่อมต่อ
+                  </Button>
+                )}
+              </div>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* How auto-posting works */}
-      <Card>
-        <div className="mb-4 flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-violet-600" />
-          <h3 className="text-base font-bold text-slate-900">
-            โพสต์อัตโนมัติทำงานอย่างไร
-          </h3>
-        </div>
-        <ol className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Step
-            n={1}
-            icon={<Link2 className="h-4 w-4" />}
-            title="เชื่อมต่อช่องทาง"
-            desc="กด “เชื่อมต่อ” แล้วยืนยันสิทธิ์กับแพลตฟอร์ม (เปิดให้ใช้งานเวอร์ชันถัดไป)"
-          />
-          <Step
-            n={2}
-            icon={<CheckCheck className="h-4 w-4" />}
-            title="อนุมัติคอนเทนต์"
-            desc="ตรวจและกดอนุมัติโพสต์ที่ Story AI ร่างให้ในหน้า “รออนุมัติ”"
-          />
-          <Step
-            n={3}
-            icon={<Clock3 className="h-4 w-4" />}
-            title="ระบบโพสต์ให้เอง"
-            desc="โพสต์ถูกส่งขึ้นแพลตฟอร์มตามวัน-เวลาในปฏิทินโดยอัตโนมัติ"
-          />
-        </ol>
-      </Card>
-
-      <ConnectModal
-        platform={modalPlatform}
-        connected={modalPlatform ? connections[modalPlatform] : false}
-        onClose={() => setModalPlatform(null)}
-        onToggle={toggleMock}
+      <ConnectWizard
+        channel={wizard ? getChannel(wizard) : null}
+        onClose={() => setWizard(null)}
+        onConnected={() => wizard && connect(wizard)}
       />
     </div>
-  );
-}
-
-function Step({
-  n,
-  icon,
-  title,
-  desc,
-}: {
-  n: number;
-  icon: React.ReactNode;
-  title: string;
-  desc: string;
-}) {
-  return (
-    <li className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-      <div className="mb-2 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-r from-violet-600 to-blue-600 text-xs font-bold text-white">
-          {n}
-        </span>
-        <span className="text-violet-600">{icon}</span>
-      </div>
-      <div className="text-sm font-semibold text-slate-900">{title}</div>
-      <p className="mt-1 text-xs leading-relaxed text-slate-500">{desc}</p>
-    </li>
   );
 }
