@@ -203,73 +203,80 @@ export function SceneCard({
             </div>
           )}
 
-          {/* Generate controls */}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {/* Image provider toggle (Grok เร็ว · ChatGPT ดีกว่าเมื่อรวมตัวละคร+สินค้า) */}
-            <div className="inline-flex items-center gap-1.5">
-              <span className="text-[11px] font-medium text-slate-400">ภาพ:</span>
-              <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
-                {(['grok', 'chatgpt'] as const).map((p) => {
-                  const active = media.imageProvider === p;
-                  return (
-                    <button
-                      key={p}
-                      type="button"
-                      disabled={busy}
-                      onClick={() => onMediaChange({ imageProvider: p })}
-                      title={
-                        p === 'chatgpt'
-                          ? 'ChatGPT — ดีกว่าเมื่อรวมตัวละคร + สินค้าในภาพเดียว'
-                          : 'Grok — เร็วกว่า'
-                      }
-                      className={
-                        'rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ' +
-                        (active
-                          ? 'bg-white text-violet-700 shadow-sm'
-                          : 'text-slate-500 hover:text-slate-700')
-                      }
-                    >
-                      {p === 'grok' ? 'Grok' : 'ChatGPT'}
-                    </button>
-                  );
-                })}
+          {/* Controls — grouped by category */}
+          <div className="space-y-2.5 pt-1">
+            {/* หมวด: สร้างสื่อ */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-1.5">
+                <span className="text-[11px] font-medium text-slate-400">ภาพ:</span>
+                <div className="inline-flex rounded-lg bg-slate-100 p-0.5">
+                  {(['grok', 'chatgpt'] as const).map((p) => {
+                    const active = media.imageProvider === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => onMediaChange({ imageProvider: p })}
+                        title={
+                          p === 'chatgpt'
+                            ? 'ChatGPT — ดีกว่าเมื่อรวมตัวละคร + สินค้าในภาพเดียว'
+                            : 'Grok — เร็วกว่า'
+                        }
+                        className={
+                          'rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ' +
+                          (active
+                            ? 'bg-white text-violet-700 shadow-sm'
+                            : 'text-slate-500 hover:text-slate-700')
+                        }
+                      >
+                        {p === 'grok' ? 'Grok' : 'ChatGPT'}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+
+              <Button
+                size="sm"
+                variant="soft"
+                icon={<ImageIcon className="h-4 w-4" />}
+                loading={imageLoading}
+                disabled={busy}
+                onClick={onGenerateImage}
+              >
+                สร้างรูปภาพ
+              </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                icon={<Film className="h-4 w-4" />}
+                loading={videoLoading}
+                disabled={busy || !media.imageDataUrl}
+                onClick={onGenerateVideo}
+                title={!media.imageDataUrl ? 'สร้างรูปภาพก่อน จึงจะสร้างวิดีโอจากรูปได้' : undefined}
+              >
+                สร้างวิดีโอ
+              </Button>
             </div>
 
-            <Button
-              size="sm"
-              variant="soft"
-              icon={<ImageIcon className="h-4 w-4" />}
-              loading={imageLoading}
-              disabled={busy}
-              onClick={onGenerateImage}
-            >
-              สร้างรูปภาพ
-            </Button>
+            {/* หมวด: คัดลอก prompt (ไปสร้างเองนอกระบบ) */}
+            <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                คัดลอก prompt
+              </span>
+              <CopyBtn text={scene.visualPrompt} label="ภาพ" />
+              <CopyBtn text={scene.videoPrompt} label="วิดีโอ" />
+            </div>
 
-            <Button
-              size="sm"
-              variant="outline"
-              icon={<Film className="h-4 w-4" />}
-              loading={videoLoading}
-              disabled={busy || !media.imageDataUrl}
-              onClick={onGenerateVideo}
-              title={!media.imageDataUrl ? 'สร้างรูปภาพก่อน จึงจะสร้างวิดีโอจากรูปได้' : undefined}
-            >
-              สร้างวิดีโอ
-            </Button>
-
-            {/* Copy the prompts for manual generation elsewhere */}
-            <span className="mx-0.5 h-5 w-px self-center bg-slate-200" />
-            <CopyBtn text={scene.visualPrompt} label="prompt ภาพ" />
-            <CopyBtn text={scene.videoPrompt} label="prompt วิดีโอ" />
+            {!media.imageDataUrl && (
+              <p className="text-[11px] text-slate-400">
+                💡 สร้าง <span className="font-medium text-slate-500">รูปภาพ</span> ก่อน
+                จึงจะสร้างวิดีโอ (จากรูปนั้น) ได้
+              </p>
+            )}
           </div>
-          {!media.imageDataUrl && (
-            <p className="text-[11px] text-slate-400">
-              💡 สร้าง <span className="font-medium text-slate-500">รูปภาพ</span> ก่อน
-              จึงจะสร้างวิดีโอ (จากรูปนั้น) ได้
-            </p>
-          )}
         </div>
 
         {/* Right: preview area (9:16) */}
@@ -299,7 +306,7 @@ export function SceneCard({
                 <Spinner size={22} />
                 <p className="text-[11px] leading-snug text-slate-500">
                   {imageLoading
-                    ? `กำลังเจนภาพผ่าน ${media.imageProvider === 'grok' ? 'Grok' : 'ChatGPT'}…\nอย่าปิดหน้านี้ ~1-2 นาที`
+                    ? `กำลังเจนภาพผ่าน ${media.imageProvider === 'grok' ? 'Grok' : 'ChatGPT'}…\nอย่าปิดหน้านี้ ~1-3 นาที`
                     : 'กำลังเจนวิดีโอผ่าน Grok…\nอย่าปิดหน้านี้ ~3-7 นาที'}
                 </p>
               </div>
