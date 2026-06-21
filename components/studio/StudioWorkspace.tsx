@@ -231,6 +231,11 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     }));
   };
 
+  // First selected character that has a reference image — locks the look via
+  // image-to-image when generating scene visuals/clips.
+  const charRefImage = (): string | undefined =>
+    characters.find((c) => selectedCharacterIds.includes(c.id) && c.refImage)?.refImage;
+
   const genImage = async (key: string, scene: Scene) => {
     const provider = media[key]?.imageProvider ?? 'grok';
     patchMedia(key, { imageStatus: 'loading', imageError: undefined });
@@ -238,6 +243,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
       const dataUrl = await postGenerate('/api/generate-image', {
         prompt: scene.visualPrompt,
         provider,
+        refImage: charRefImage(),
       });
       patchMedia(key, { imageStatus: 'done', imageDataUrl: dataUrl });
     } catch (e) {
@@ -249,11 +255,15 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
   };
 
   const genVideo = async (key: string, scene: Scene) => {
+    // Video is generated FROM the scene image (image-to-video). The UI gates the
+    // button until the image exists, so imageDataUrl should be present here.
+    const startFrame = media[key]?.imageDataUrl;
     patchMedia(key, { videoStatus: 'loading', videoError: undefined });
     try {
       const dataUrl = await postGenerate('/api/generate-video', {
         prompt: scene.videoPrompt,
         tool: 'grok',
+        refImage: startFrame,
       });
       patchMedia(key, { videoStatus: 'done', videoDataUrl: dataUrl });
     } catch (e) {

@@ -231,12 +231,19 @@ export function SceneCard({
               variant="outline"
               icon={<Film className="h-4 w-4" />}
               loading={videoLoading}
-              disabled={busy}
+              disabled={busy || !media.imageDataUrl}
               onClick={onGenerateVideo}
+              title={!media.imageDataUrl ? 'สร้างรูปภาพก่อน จึงจะสร้างวิดีโอจากรูปได้' : undefined}
             >
               สร้างวิดีโอ
             </Button>
           </div>
+          {!media.imageDataUrl && (
+            <p className="text-[11px] text-slate-400">
+              💡 สร้าง <span className="font-medium text-slate-500">รูปภาพ</span> ก่อน
+              จึงจะสร้างวิดีโอ (จากรูปนั้น) ได้
+            </p>
+          )}
         </div>
 
         {/* Right: preview area (9:16) */}

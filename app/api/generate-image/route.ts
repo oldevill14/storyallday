@@ -11,9 +11,10 @@
 // this app's Firebase auth. If a profile isn't logged in, we surface a Thai hint
 // telling the user which `ai-flow login` to run.
 
-import { runAiFlow, fileToDataUrlAndUnlink } from '@/lib/aiflow';
+import { runAiFlow, runAiFlowImageRef, fileToDataUrlAndUnlink } from '@/lib/aiflow';
 
 export const runtime = 'nodejs';
+export const maxDuration = 480;
 
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -51,7 +52,7 @@ function friendlyError(provider: ImageProvider, raw: string): string {
 }
 
 export async function POST(req: Request) {
-  let body: { prompt?: unknown; provider?: unknown };
+  let body: { prompt?: unknown; provider?: unknown; refImage?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -67,8 +68,17 @@ export async function POST(req: Request) {
   const provider: ImageProvider = body.provider === 'chatgpt' ? 'chatgpt' : 'grok';
   const [sub, ext] = SUB_BY_PROVIDER[provider];
 
+  // When a character reference image is provided, lock the character's look via
+  // image-to-image (image-ref / grok-image-ref) instead of plain text-to-image.
+  const refImage =
+    typeof body.refImage === 'string' && body.refImage.startsWith('data:image/')
+      ? body.refImage
+      : '';
+
   try {
-    const outPath = await runAiFlow(sub, prompt, ext);
+    const outPath = refImage
+      ? await runAiFlowImageRef(prompt, refImage, provider)
+      : await runAiFlow(sub, prompt, ext);
     const dataUrl = await fileToDataUrlAndUnlink(outPath);
     return json({ ok: true, dataUrl });
   } catch (e) {

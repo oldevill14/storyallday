@@ -8,7 +8,7 @@
 // (~2-5 min); runAiFlow uses a ~7-min timeout for mp4 output. The CLI drives the
 // user's logged-in Grok browser profile, independent of this app's Firebase auth.
 
-import { runAiFlow, fileToDataUrlAndUnlink } from '@/lib/aiflow';
+import { runAiFlow, runAiFlowVideoRef, fileToDataUrlAndUnlink } from '@/lib/aiflow';
 
 export const runtime = 'nodejs';
 
@@ -41,7 +41,7 @@ function friendlyError(raw: string): string {
 }
 
 export async function POST(req: Request) {
-  let body: { prompt?: unknown; tool?: unknown };
+  let body: { prompt?: unknown; tool?: unknown; refImage?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -59,8 +59,17 @@ export async function POST(req: Request) {
     return json({ ok: false, error: `เครื่องมือวิดีโอไม่รองรับ: ${String(body.tool)} (รองรับเฉพาะ 'grok')` }, 400);
   }
 
+  // A start-frame image (the generated scene image) → image-to-video so the
+  // character/scene is locked. Required by the UI (video button needs an image).
+  const refImage =
+    typeof body.refImage === 'string' && body.refImage.startsWith('data:image/')
+      ? body.refImage
+      : '';
+
   try {
-    const outPath = await runAiFlow('grok-video', prompt, 'mp4');
+    const outPath = refImage
+      ? await runAiFlowVideoRef(prompt, refImage)
+      : await runAiFlow('grok-video', prompt, 'mp4');
     const dataUrl = await fileToDataUrlAndUnlink(outPath);
     return json({ ok: true, dataUrl });
   } catch (e) {

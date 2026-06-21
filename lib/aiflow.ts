@@ -167,6 +167,32 @@ export function runAiFlowImageRef(
   });
 }
 
+/**
+ * Generate a VIDEO from a start-frame image (image-to-video) via ai-flow's
+ * `grok-video-ref` (Grok Imagine, Video mode). Locks the character from the
+ * supplied frame. Serialized; ~6 min timeout for mp4.
+ */
+export function runAiFlowVideoRef(prompt: string, refDataUrl: string): Promise<string> {
+  return enqueue(async () => {
+    const refPath = await dataUrlToTempFile(refDataUrl);
+    const id = `${Date.now()}_${counter++}`;
+    const outPath = path.join(os.tmpdir(), `saf_vidref_${id}.mp4`);
+    try {
+      const { stdout, stderr } = await execAiFlow(
+        ['grok-video-ref', prompt, refPath, outPath],
+        420_000,
+      );
+      if (await fileExists(outPath)) return outPath;
+      const downloaded = parseDownloadedPath(stdout);
+      if (downloaded && (await fileExists(downloaded))) return downloaded;
+      const detail = (stderr.trim() || stdout.trim() || 'ai-flow ไม่ได้สร้างไฟล์ผลลัพธ์').slice(-2000);
+      throw new Error(detail);
+    } finally {
+      void fs.unlink(refPath).catch(() => {});
+    }
+  });
+}
+
 async function fileExists(p: string): Promise<boolean> {
   try {
     const st = await fs.stat(p);
