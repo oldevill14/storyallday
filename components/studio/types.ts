@@ -100,7 +100,8 @@ export type StudioForm = {
   episodeCount: 1 | 3 | 5;
   scenesPerEpisode: 1 | 3 | 5;
   style: VisualStyle;
-  aspectRatio: '9:16';
+  /** 9:16 = vertical (แนวตั้ง) · 16:9 = horizontal (แนวนอน). */
+  aspectRatio: '9:16' | '16:9';
   /** Product being sold — woven into every scene prompt. */
   productName: string;
   productDetail: string;

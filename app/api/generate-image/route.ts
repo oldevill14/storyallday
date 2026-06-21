@@ -52,7 +52,12 @@ function friendlyError(provider: ImageProvider, raw: string): string {
 }
 
 export async function POST(req: Request) {
-  let body: { prompt?: unknown; provider?: unknown; refImage?: unknown };
+  let body: {
+    prompt?: unknown;
+    provider?: unknown;
+    refImage?: unknown;
+    refImages?: unknown;
+  };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -68,16 +73,20 @@ export async function POST(req: Request) {
   const provider: ImageProvider = body.provider === 'chatgpt' ? 'chatgpt' : 'grok';
   const [sub, ext] = SUB_BY_PROVIDER[provider];
 
-  // When a character reference image is provided, lock the character's look via
-  // image-to-image (image-ref / grok-image-ref) instead of plain text-to-image.
-  const refImage =
-    typeof body.refImage === 'string' && body.refImage.startsWith('data:image/')
-      ? body.refImage
-      : '';
+  // Reference image(s) → image-to-image (locks character + product together).
+  // Accepts refImages[] (multi) or a single refImage; ChatGPT & Grok both keep
+  // multiple. Falls back to plain text-to-image when none provided.
+  const isImg = (x: unknown): x is string =>
+    typeof x === 'string' && x.startsWith('data:image/');
+  const refImages: string[] = Array.isArray(body.refImages)
+    ? body.refImages.filter(isImg)
+    : isImg(body.refImage)
+      ? [body.refImage]
+      : [];
 
   try {
-    const outPath = refImage
-      ? await runAiFlowImageRef(prompt, refImage, provider)
+    const outPath = refImages.length
+      ? await runAiFlowImageRef(prompt, refImages, provider)
       : await runAiFlow(sub, prompt, ext);
     const dataUrl = await fileToDataUrlAndUnlink(outPath);
     return json({ ok: true, dataUrl });

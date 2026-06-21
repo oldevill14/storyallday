@@ -144,25 +144,28 @@ async function dataUrlToTempFile(dataUrl: string): Promise<string> {
  */
 export function runAiFlowImageRef(
   prompt: string,
-  refDataUrl: string,
+  refDataUrls: string | string[],
   engine: 'chatgpt' | 'grok' = 'chatgpt',
 ): Promise<string> {
   return enqueue(async () => {
-    const refPath = await dataUrlToTempFile(refDataUrl);
+    const list = (Array.isArray(refDataUrls) ? refDataUrls : [refDataUrls]).filter(Boolean);
+    // ChatGPT accepts multiple reference images (e.g. character + product);
+    // Grok supports one — the CLI uses the first when several are passed.
+    const refPaths = await Promise.all(list.map(dataUrlToTempFile));
     const sub = engine === 'grok' ? 'grok-image-ref' : 'image-ref';
     const ext = engine === 'grok' ? 'jpg' : 'png';
     const id = `${Date.now()}_${counter++}`;
     const outPath = path.join(os.tmpdir(), `saf_sheet_${id}.${ext}`);
     try {
       const { stdout, stderr } = await execAiFlow(
-        [sub, prompt, refPath, outPath],
+        [sub, prompt, refPaths.join(','), outPath],
         300_000,
       );
       if (await fileExists(outPath)) return outPath;
       const detail = (stderr.trim() || stdout.trim() || 'ai-flow ไม่ได้สร้างไฟล์ผลลัพธ์').slice(-2000);
       throw new Error(detail);
     } finally {
-      void fs.unlink(refPath).catch(() => {});
+      for (const p of refPaths) void fs.unlink(p).catch(() => {});
     }
   });
 }

@@ -19,8 +19,12 @@ export const SAFETY_SUFFIX =
  * System prompt — Thai director persona with WorkD safety baked in. The model
  * must return STRICT JSON only.
  */
-export function buildSystemPrompt(style: VisualStyle): string {
-  return `คุณคือผู้กำกับและนักเขียนบท "ละครสั้นแนวตั้ง" (vertical short drama) มืออาชีพสำหรับสตูดิโอผลิตคอนเทนต์เชิงพาณิชย์ (WorkD-Cine)
+export function buildSystemPrompt(
+  style: VisualStyle,
+  aspectRatio: '9:16' | '16:9' = '9:16',
+): string {
+  const orient = aspectRatio === '16:9' ? 'horizontal/landscape' : 'vertical';
+  return `คุณคือผู้กำกับและนักเขียนบท "ละครสั้น" (short drama) มืออาชีพสำหรับสตูดิโอผลิตคอนเทนต์เชิงพาณิชย์ (WorkD-Cine)
 
 หน้าที่ของคุณ: แตกหัวข้อ/แนวคิดที่ได้รับ ออกเป็นเรื่อง → ตอน → ฉาก พร้อม prompt สำหรับสร้างภาพและวิดีโอแบบ image-to-video
 
@@ -31,7 +35,7 @@ export function buildSystemPrompt(style: VisualStyle): string {
 - ทุกค่า visualPrompt และ videoPrompt ต้องลงท้ายด้วยประโยคนี้เป๊ะ ๆ (ภาษาอังกฤษ): "${SAFETY_SUFFIX}"
 
 ข้อกำหนดของ prompt:
-- visualPrompt: ภาษาอังกฤษ เริ่มต้นด้วยสไตล์ภาพ "${style}" แล้วตามด้วยรายละเอียดฉาก ตัวละคร แสง มุมกล้อง องค์ประกอบ สำหรับอัตราส่วน 9:16 (vertical) จบด้วยประโยคความปลอดภัย
+- visualPrompt: ภาษาอังกฤษ เริ่มต้นด้วยสไตล์ภาพ "${style}" แล้วตามด้วยรายละเอียดฉาก ตัวละคร แสง มุมกล้อง องค์ประกอบ สำหรับอัตราส่วน ${aspectRatio} (${orient}) จบด้วยประโยคความปลอดภัย
 - videoPrompt: ภาษาอังกฤษ เป็นคำสั่ง image-to-video — บอกการเคลื่อนไหวกล้อง (camera direction) การเคลื่อนไหวของตัวละคร และใส่บทพูดในเครื่องหมายคำพูด ("...") จบด้วยประโยคความปลอดภัย
 - dialogue: ภาษาไทย เป็นบทพูดของตัวละครในฉากนั้น
 - duration: ระยะเวลาคลิป ใช้ "8s"
@@ -111,7 +115,7 @@ ${contextBlock(ctx)}
 จำนวนตอน: ${form.episodeCount} ตอน (ep เรียง 1..${form.episodeCount})
 จำนวนฉากต่อตอน: ${form.scenesPerEpisode} ฉาก
 สไตล์ภาพ: ${form.style}
-อัตราส่วนภาพ: ${form.aspectRatio} (แนวตั้ง)
+อัตราส่วนภาพ: ${form.aspectRatio} (${form.aspectRatio === '16:9' ? 'แนวนอน' : 'แนวตั้ง'})
 
 ข้อกำหนด:
 - ต้องมี episodes ครบ ${form.episodeCount} ตอน และทุกตอนต้องมี scenes ครบ ${form.scenesPerEpisode} ฉาก
@@ -154,9 +158,11 @@ function ctxForRegen(ctx?: CreativeContext): string {
 export function buildImageRegenPrompt(
   scene: Scene,
   style: VisualStyle,
-  ctx?: CreativeContext
+  ctx?: CreativeContext,
+  aspectRatio: '9:16' | '16:9' = '9:16'
 ): string {
-  return `Rewrite the IMAGE prompt for this single vertical 9:16 scene. Output ONLY the English image prompt — no explanation, no quotes, no markdown.
+  const orient = aspectRatio === '16:9' ? 'horizontal/landscape' : 'vertical';
+  return `Rewrite the IMAGE prompt for this single ${aspectRatio} (${orient}) scene. Output ONLY the English image prompt — no explanation, no quotes, no markdown.
 
 Start with the visual style "${style}". Describe the subject, setting, lighting, camera angle, composition. ${ctxForRegen(
     ctx
@@ -174,9 +180,11 @@ End with exactly: ${SAFETY_SUFFIX}`;
 export function buildVideoRegenPrompt(
   scene: Scene,
   style: VisualStyle,
-  ctx?: CreativeContext
+  ctx?: CreativeContext,
+  aspectRatio: '9:16' | '16:9' = '9:16'
 ): string {
-  return `Rewrite the IMAGE-TO-VIDEO prompt for this single vertical 9:16 scene. Output ONLY the English prompt — no explanation, no markdown.
+  const orient = aspectRatio === '16:9' ? 'horizontal/landscape' : 'vertical';
+  return `Rewrite the IMAGE-TO-VIDEO prompt for this single ${aspectRatio} (${orient}) scene. Output ONLY the English prompt — no explanation, no markdown.
 
 Describe what MOVES/changes (camera direction + character motion), keep it ~8 seconds, and include the spoken line in quotes. ${ctxForRegen(
     ctx

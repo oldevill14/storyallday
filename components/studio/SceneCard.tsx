@@ -23,6 +23,7 @@ type Props = {
   ep: number;
   sceneIndex: number;
   scene: Scene;
+  aspectRatio: '9:16' | '16:9';
   media: SceneMedia;
   onSceneChange: (patch: Partial<Scene>) => void;
   onMediaChange: (patch: Partial<SceneMedia>) => void;
@@ -77,6 +78,7 @@ export function SceneCard({
   ep,
   sceneIndex,
   scene,
+  aspectRatio,
   media,
   onSceneChange,
   onMediaChange,
@@ -248,7 +250,12 @@ export function SceneCard({
 
         {/* Right: preview area (9:16) */}
         <div className="flex flex-col gap-2">
-          <div className="relative mx-auto flex aspect-[9/16] w-full max-w-[220px] items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-violet-50/40">
+          <div
+            className={
+              'relative mx-auto flex w-full items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-violet-50/40 ' +
+              (aspectRatio === '16:9' ? 'aspect-video max-w-[360px]' : 'aspect-[9/16] max-w-[220px]')
+            }
+          >
             {/* Video wins if present */}
             {media.videoDataUrl ? (
               <video

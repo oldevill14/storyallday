@@ -362,13 +362,31 @@ export function StoryForm({
         </div>
       </div>
 
-      {/* Aspect ratio (fixed 9:16) */}
-      <div className="flex items-center gap-2">
-        <span className="text-sm font-medium text-slate-700">อัตราส่วน</span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
-          <span className="inline-block h-4 w-[9px] rounded-sm border-2 border-slate-400" />
-          9:16 แนวตั้ง
-        </span>
+      {/* Aspect ratio */}
+      <div>
+        <label className="mb-1.5 block text-sm font-medium text-slate-700">อัตราส่วน</label>
+        <div className="inline-flex rounded-xl bg-slate-100 p-1">
+          {([
+            ['9:16', 'แนวตั้ง', 'h-4 w-[9px]'],
+            ['16:9', 'แนวนอน', 'h-[9px] w-4'],
+          ] as const).map(([r, label, box]) => {
+            const active = form.aspectRatio === r;
+            return (
+              <button
+                key={r}
+                type="button"
+                onClick={() => onChange({ aspectRatio: r })}
+                className={
+                  'inline-flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-semibold transition-colors ' +
+                  (active ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-500 hover:text-slate-700')
+                }
+              >
+                <span className={`inline-block rounded-sm border-2 ${box} ${active ? 'border-violet-500' : 'border-slate-400'}`} />
+                {r} {label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* No-key notice */}

@@ -232,7 +232,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     try {
       const text = await callAI(
         {
-          system: buildSystemPrompt(form.style),
+          system: buildSystemPrompt(form.style, form.aspectRatio),
           prompt: buildUserPrompt(form, creativeCtx()),
         },
         settings
@@ -281,12 +281,26 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
 
   const genImage = async (key: string, scene: Scene) => {
     const provider = media[key]?.imageProvider ?? 'grok';
+    // Send the character image + product image so both appear in one frame.
+    const charRef = charRefImage();
+    const prodRef = isSales ? form.productImage : undefined;
+    const refs = [charRef, prodRef].filter(Boolean) as string[];
+    let refNote = '';
+    if (charRef && prodRef) {
+      refNote =
+        'Reference images: image 1 = the character (keep identity, face, hair and outfit consistent); image 2 = the product (show this EXACT product, same shape/label/colors). Place the character and the product together naturally in the same scene — the character presenting/holding/using the product.';
+    } else if (charRef) {
+      refNote = 'Reference image = the character — keep identity, face and outfit consistent.';
+    } else if (prodRef) {
+      refNote = 'Reference image = the product — feature this exact product in the scene.';
+    }
+    const prompt = refNote ? `${refNote}\n\n${scene.visualPrompt}` : scene.visualPrompt;
     patchMedia(key, { imageStatus: 'loading', imageError: undefined });
     try {
       const dataUrl = await postGenerate('/api/generate-image', {
-        prompt: scene.visualPrompt,
+        prompt,
         provider,
-        refImage: charRefImage(),
+        refImages: refs,
       });
       patchMedia(key, { imageStatus: 'done', imageDataUrl: dataUrl });
     } catch (e) {
@@ -322,7 +336,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     setGenError(null);
     try {
       const text = await callAI(
-        { prompt: buildImageRegenPrompt(scene, form.style, creativeCtx()) },
+        { prompt: buildImageRegenPrompt(scene, form.style, creativeCtx(), form.aspectRatio) },
         settings
       );
       patchScene(epIndex, sceneIdx, { visualPrompt: finalizeImagePrompt(text, form.style) });
@@ -338,7 +352,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     setGenError(null);
     try {
       const text = await callAI(
-        { prompt: buildVideoRegenPrompt(scene, form.style, creativeCtx()) },
+        { prompt: buildVideoRegenPrompt(scene, form.style, creativeCtx(), form.aspectRatio) },
         settings
       );
       patchScene(epIndex, sceneIdx, { videoPrompt: finalizeVideoPrompt(text) });
@@ -508,6 +522,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
                       ep={epi.ep}
                       sceneIndex={sceneIdx}
                       scene={scene}
+                      aspectRatio={form.aspectRatio}
                       media={media[key] ?? emptyMedia()}
                       onSceneChange={(patch) => patchScene(epIndex, sceneIdx, patch)}
                       onMediaChange={(patch) => patchMedia(key, patch)}
