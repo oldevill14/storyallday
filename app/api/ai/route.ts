@@ -133,6 +133,53 @@ function extractProviderError(payload: unknown, fallback: string): string {
   return fallback;
 }
 
+// --- vision helpers (attach an image to the last user message) --------------
+
+function hasImage(img: unknown): img is string {
+  return typeof img === 'string' && img.startsWith('data:image/');
+}
+function parseDataUrl(dataUrl: string): { mediaType: string; base64: string } | null {
+  const m = /^data:(image\/[a-z.+-]+);base64,(.+)$/i.exec(dataUrl);
+  return m ? { mediaType: m[1], base64: m[2] } : null;
+}
+function lastUserIndex(msgs: AIMessage[]): number {
+  for (let i = msgs.length - 1; i >= 0; i--) if (msgs[i].role === 'user') return i;
+  return Math.max(0, msgs.length - 1);
+}
+/** OpenAI / OpenRouter multimodal: image_url with a data URL. */
+function openaiMsgsWithImage(messages: AIMessage[], dataUrl: string): unknown[] {
+  const idx = lastUserIndex(messages);
+  return messages.map((m, i) =>
+    i === idx
+      ? {
+          role: 'user',
+          content: [
+            { type: 'text', text: m.content },
+            { type: 'image_url', image_url: { url: dataUrl } },
+          ],
+        }
+      : { role: m.role, content: m.content },
+  );
+}
+/** Anthropic / zai multimodal: base64 image source. */
+function anthropicMsgsWithImage(
+  messages: AIMessage[],
+  img: { mediaType: string; base64: string },
+): unknown[] {
+  const idx = lastUserIndex(messages);
+  return messages.map((m, i) =>
+    i === idx
+      ? {
+          role: 'user',
+          content: [
+            { type: 'text', text: m.content },
+            { type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.base64 } },
+          ],
+        }
+      : { role: m.role, content: m.content },
+  );
+}
+
 export async function POST(req: Request) {
   let body: AIProxyRequest;
   try {
@@ -141,7 +188,7 @@ export async function POST(req: Request) {
     return json({ error: 'Invalid JSON body' }, 400);
   }
 
-  const { provider, apiKey, model, baseUrl, system, messages } = body || {};
+  const { provider, apiKey, model, baseUrl, system, messages, image } = body || {};
 
   if (!provider || !DEFAULT_BASE_URLS[provider]) {
     return json({ error: `Unknown provider: ${String(provider)}` }, 400);
@@ -172,6 +219,8 @@ export async function POST(req: Request) {
     let headers: Record<string, string>;
     let payload: unknown;
 
+    const img = hasImage(image) ? parseDataUrl(image) : null;
+
     if (provider === 'openai') {
       url = `${base}/v1/chat/completions`;
       headers = {
@@ -180,7 +229,7 @@ export async function POST(req: Request) {
       };
       const msgs = [
         ...(system ? [{ role: 'system', content: system }] : []),
-        ...messages,
+        ...(img ? openaiMsgsWithImage(messages, image as string) : messages),
       ];
       payload = { model, messages: msgs };
     } else if (provider === 'openrouter') {
@@ -195,7 +244,7 @@ export async function POST(req: Request) {
       };
       const msgs = [
         ...(system ? [{ role: 'system', content: system }] : []),
-        ...messages,
+        ...(img ? openaiMsgsWithImage(messages, image as string) : messages),
       ];
       payload = { model, messages: msgs };
     } else if (provider === 'anthropic' || provider === 'zai') {
@@ -209,7 +258,7 @@ export async function POST(req: Request) {
         model,
         max_tokens: 2048,
         ...(system ? { system } : {}),
-        messages,
+        messages: img ? anthropicMsgsWithImage(messages, img) : messages,
       };
     } else {
       // gemini
@@ -217,11 +266,18 @@ export async function POST(req: Request) {
         model
       )}:generateContent?key=${encodeURIComponent(apiKey)}`;
       headers = { 'content-type': 'application/json' };
+      const lastUser = lastUserIndex(messages);
       payload = {
         ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
-        contents: messages.map((m) => ({
+        contents: messages.map((m, i) => ({
           role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
+          parts:
+            img && i === lastUser
+              ? [
+                  { text: m.content },
+                  { inline_data: { mime_type: img.mediaType, data: img.base64 } },
+                ]
+              : [{ text: m.content }],
         })),
       };
     }

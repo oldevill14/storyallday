@@ -1,8 +1,18 @@
 'use client';
 
 import Link from 'next/link';
-import { Clapperboard, Megaphone, Package, Sparkles, Users, Wand2 } from 'lucide-react';
+import {
+  Clapperboard,
+  ImageIcon,
+  Megaphone,
+  Package,
+  Sparkles,
+  Upload,
+  Users,
+  Wand2,
+} from 'lucide-react';
 import { Button, Card } from '@/components/ui';
+import { fileToResizedDataUrl } from '@/lib/image';
 import {
   SALES_STYLES,
   SALES_STYLE_META,
@@ -183,6 +193,58 @@ export function StoryForm({
         <p className="mt-1.5 text-xs text-slate-400">
           ระบบจะร้อยสินค้านี้เข้าไปในทุกฉาก + พรอมต์ภาพ/วิดีโอให้อัตโนมัติ
         </p>
+
+        {/* Product image (vision: ให้ AI คิดหัวข้อจากรูป) */}
+        <div className="mt-3">
+          <span className="mb-1 block text-xs font-medium text-slate-500">
+            รูปสินค้า (ไม่บังคับ) — ใช้ให้ AI “เห็น” แล้วคิดหัวข้อจากรูปได้
+          </span>
+          <div className="flex items-center gap-3">
+            {form.productImage ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={form.productImage}
+                alt="product"
+                className="h-16 w-16 rounded-lg object-cover ring-1 ring-slate-200"
+              />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white text-slate-300">
+                <ImageIcon className="h-6 w-6" />
+              </div>
+            )}
+            <div className="flex flex-col items-start gap-1.5">
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                <Upload className="h-3.5 w-3.5" />
+                {form.productImage ? 'เปลี่ยนรูป' : 'อัปโหลดรูปสินค้า'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      try {
+                        onChange({ productImage: await fileToResizedDataUrl(f) });
+                      } catch {
+                        /* ignore decode errors */
+                      }
+                    }
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              {form.productImage && (
+                <button
+                  type="button"
+                  onClick={() => onChange({ productImage: undefined })}
+                  className="text-xs font-medium text-rose-600 hover:underline"
+                >
+                  ลบรูป
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Sales style */}
         <div className="mt-4 border-t border-slate-200/70 pt-3">

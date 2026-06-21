@@ -13,7 +13,7 @@ export type AIConnection = Pick<
  * returns the normalized text. Throws on { error } or network failure.
  */
 export async function callAI(
-  opts: { system?: string; prompt: string },
+  opts: { system?: string; prompt: string; image?: string },
   settings: AIConnection
 ): Promise<string> {
   const res = await fetch('/api/ai', {
@@ -26,6 +26,7 @@ export async function callAI(
       baseUrl: settings.baseUrl || undefined,
       system: opts.system,
       messages: [{ role: 'user', content: opts.prompt }],
+      image: opts.image,
     }),
   });
 

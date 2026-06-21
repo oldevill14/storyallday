@@ -153,6 +153,8 @@ export type AIProxyRequest = {
   baseUrl?: string;
   system?: string;
   messages: AIMessage[];
+  /** Optional image (data URL) attached to the last user message — vision. */
+  image?: string;
 };
 
 /** Normalized response from POST /api/ai. */

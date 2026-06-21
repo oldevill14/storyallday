@@ -104,6 +104,8 @@ export type StudioForm = {
   /** Product being sold — woven into every scene prompt. */
   productName: string;
   productDetail: string;
+  /** Product reference image (resized data URL) — used for vision + scene ref. */
+  productImage?: string;
   /** Selling angle/tone. */
   salesStyle: SalesStyle;
 };

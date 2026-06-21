@@ -200,13 +200,19 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
         `ช่วยคิด "หัวข้อ/แนวคิด" สำหรับ${kind} ความยาว 3-5 ประโยค เป็นภาษาไทย`,
         title ? `อ้างอิงจากชื่อเรื่อง: "${title}" (ให้สอดคล้องกับชื่อนี้)` : '',
         productLine,
+        isSales && form.productImage
+          ? 'มี "รูปสินค้า" แนบมาด้วย — ดูรูปแล้วนำลักษณะ/ประเภท/จุดเด่นของสินค้าที่เห็นมาใช้คิดหัวข้อ'
+          : '',
         'ระบุ: ตัวละครหลัก (ผู้ใหญ่), อารมณ์/โทน, จุดพลิกของเรื่อง และฉากจบสั้นๆ',
         isSales ? 'ร้อยเรื่องให้นำไปสู่การขายสินค้าได้เนียน' : '',
         'ตอบกลับเฉพาะเนื้อหาหัวข้อ/แนวคิด — ไม่ต้องมีคำนำ ไม่ต้องมีหัวข้อกำกับ ไม่ต้องใส่เครื่องหมายคำพูด',
       ]
         .filter(Boolean)
         .join('\n');
-      const text = await callAI({ prompt }, settings);
+      const text = await callAI(
+        { prompt, image: isSales ? form.productImage : undefined },
+        settings,
+      );
       setForm((f) => ({ ...f, topic: text.trim() }));
     } catch (e) {
       setGenError(e instanceof Error ? e.message : 'ให้ AI คิดหัวข้อไม่สำเร็จ');
