@@ -202,9 +202,13 @@ export default function CharactersPage() {
             <Sparkles className="h-5 w-5" />
           </span>
           <p className="text-sm leading-relaxed text-slate-600">
-            ตัวละครที่สร้างไว้จะเลือกใช้ได้ในหน้า{' '}
-            <span className="font-semibold text-slate-800">สร้างคลิปขายของ</span> —
-            ระบบจะนำลักษณะตัวละคร + สินค้าของคุณ มารวมกันเป็นพรอมต์ภาพ/วิดีโอให้อัตโนมัติ
+            ตัวละครที่สร้างไว้เลือกใช้ได้ทั้งหน้า{' '}
+            <span className="font-semibold text-slate-800">สตูดิโอละครสั้น</span> และ{' '}
+            <span className="font-semibold text-slate-800">สร้างคลิปขายของ</span> — ระบบจะคัดลอกลักษณะตัวละคร
+            ไปใส่ในพรอมต์ภาพ/วิดีโอให้คงหน้าตาเดิมทุกฉาก
+            <span className="text-slate-500">
+              {' '}(เฉพาะหน้าสร้างคลิปขายของ จะรวมกับสินค้า + สไตล์การขายให้อัตโนมัติด้วย)
+            </span>
           </p>
         </div>
       </Card>
