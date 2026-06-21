@@ -65,12 +65,19 @@ export type CreativeContext = {
   productDetail?: string;
   /** Verbatim English character description blocks (kept identical for consistency). */
   cast?: string[];
+  /** Selling style: { label, instruction } from SALES_STYLE_META. */
+  salesStyle?: { label: string; instruction: string };
 };
 
 /** Thai context block describing the product + chosen cast, or '' if none. */
 function contextBlock(ctx?: CreativeContext): string {
   if (!ctx) return '';
   const lines: string[] = [];
+  if (ctx.salesStyle) {
+    lines.push(
+      `สไตล์การขาย: ${ctx.salesStyle.label} — ${ctx.salesStyle.instruction} (ใช้โทนนี้กับบทพูดและการนำเสนอสินค้าในทุกฉาก)`
+    );
+  }
   if (ctx.productName?.trim() || ctx.productDetail?.trim()) {
     lines.push(
       `สินค้าที่ต้องขาย/นำเสนอในคลิป: ${ctx.productName?.trim() || '(ระบุในรายละเอียด)'}` +
@@ -125,6 +132,9 @@ export function finalizeVideoPrompt(text: string): string {
 
 function ctxForRegen(ctx?: CreativeContext): string {
   const parts: string[] = [];
+  if (ctx?.salesStyle) {
+    parts.push(`Selling tone: ${ctx.salesStyle.label} — ${ctx.salesStyle.instruction}`);
+  }
   if (ctx?.productName?.trim() || ctx?.productDetail?.trim()) {
     parts.push(
       `Product to feature prominently: ${ctx?.productName?.trim() || ''}${

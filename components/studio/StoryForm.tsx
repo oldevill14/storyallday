@@ -1,11 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { Clapperboard, Package, Sparkles, Users, Wand2 } from 'lucide-react';
+import { Clapperboard, Megaphone, Package, Sparkles, Users, Wand2 } from 'lucide-react';
 import { Button, Card } from '@/components/ui';
 import {
+  SALES_STYLES,
+  SALES_STYLE_META,
   STYLE_LABELS,
   VISUAL_STYLES,
+  type SalesStyle,
   type StudioForm,
   type VisualStyle,
 } from './types';
@@ -151,6 +154,37 @@ export function StoryForm({
         <p className="mt-1.5 text-xs text-slate-400">
           ระบบจะร้อยสินค้านี้เข้าไปในทุกฉาก + พรอมต์ภาพ/วิดีโอให้อัตโนมัติ
         </p>
+
+        {/* Sales style */}
+        <div className="mt-4 border-t border-slate-200/70 pt-3">
+          <label className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+            <Megaphone className="h-4 w-4 text-violet-600" /> สไตล์การขาย
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {SALES_STYLES.map((s: SalesStyle) => {
+              const meta = SALES_STYLE_META[s];
+              const active = form.salesStyle === s;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => onChange({ salesStyle: s })}
+                  className={
+                    'rounded-full px-3 py-1.5 text-sm font-medium transition-colors ' +
+                    (active
+                      ? 'bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-sm'
+                      : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-violet-50 hover:text-violet-700')
+                  }
+                >
+                  {meta.emoji} {meta.label}
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-xs text-slate-400">
+            {SALES_STYLE_META[form.salesStyle].instruction}
+          </p>
+        </div>
       </div>
 
       {/* Cast (reusable characters) */}

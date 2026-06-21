@@ -45,6 +45,54 @@ export type Drama = {
   episodes: Episode[];
 };
 
+/** Selling angle/tone for the dialogue + pitch. */
+export type SalesStyle = 'persuade' | 'friend' | 'ugc' | 'flashsale' | 'story';
+
+export const SALES_STYLES: SalesStyle[] = [
+  'persuade',
+  'friend',
+  'ugc',
+  'flashsale',
+  'story',
+];
+
+/** Thai label + the instruction injected into the AI prompt for each style. */
+export const SALES_STYLE_META: Record<
+  SalesStyle,
+  { label: string; emoji: string; instruction: string }
+> = {
+  persuade: {
+    label: 'ชวนซื้อ',
+    emoji: '🛒',
+    instruction:
+      'เน้นประโยชน์/จุดเด่นของสินค้าให้ชัดเจน และปิดท้ายด้วย call-to-action ที่กระตุ้นให้ซื้อทันที',
+  },
+  friend: {
+    label: 'ป้ายยาเพื่อน',
+    emoji: '💬',
+    instruction:
+      'พูดแบบเพื่อนสนิทแนะนำของดี จริงใจ เป็นกันเอง ไม่ขายแข็ง เหมือนบอกต่อสิ่งที่ชอบจริงๆ',
+  },
+  ugc: {
+    label: 'รีวิวจริง (UGC)',
+    emoji: '⭐',
+    instruction:
+      'ทำให้เหมือนลูกค้าจริงรีวิวเองแบบธรรมชาติ ไม่เว่อร์ มีรายละเอียดการใช้งานจริง น่าเชื่อถือ',
+  },
+  flashsale: {
+    label: 'โกดังลดราคา',
+    emoji: '🔥',
+    instruction:
+      'โทนเร่งด่วน คุ้มสุดๆ ของมันต้องมี เน้นโปร/ส่วนลด/จำนวนจำกัด/หมดเขตเร็ว กระตุ้นให้รีบตัดสินใจ',
+  },
+  story: {
+    label: 'เล่าเรื่องปิดการขาย',
+    emoji: '🎭',
+    instruction:
+      'เล่าเรื่อง/ดราม่าให้คนอิน แล้วค่อยเชื่อมเข้าสินค้าและปิดการขายอย่างเนียน ไม่ขายโต้งๆ ตั้งแต่ต้น',
+  },
+};
+
 /** Form inputs for STEP A. */
 export type StudioForm = {
   title: string;
@@ -56,6 +104,8 @@ export type StudioForm = {
   /** Product being sold — woven into every scene prompt. */
   productName: string;
   productDetail: string;
+  /** Selling angle/tone. */
+  salesStyle: SalesStyle;
 };
 
 /** Provider for image generation (maps to the ai-flow profiles). */

@@ -47,6 +47,7 @@ import {
 import {
   emptyMedia,
   sceneKey,
+  SALES_STYLE_META,
   type Drama,
   type SceneMedia,
   type Scene,
@@ -62,6 +63,7 @@ const DEFAULT_FORM: StudioForm = {
   aspectRatio: '9:16',
   productName: '',
   productDetail: '',
+  salesStyle: 'persuade',
 };
 
 type SavedDrama = { id: string; title: string; createdAt?: string };
@@ -108,6 +110,10 @@ export default function StudioPage() {
     cast: characters
       .filter((c) => selectedCharacterIds.includes(c.id))
       .map((c) => characterPromptBlock(c)),
+    salesStyle: {
+      label: SALES_STYLE_META[form.salesStyle].label,
+      instruction: SALES_STYLE_META[form.salesStyle].instruction,
+    },
   });
 
   const toggleCharacter = (id: string) =>
