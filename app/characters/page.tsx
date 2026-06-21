@@ -246,7 +246,7 @@ function CharacterSheetModal({
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
-  const [engine, setEngine] = useState<'chatgpt' | 'grok'>('chatgpt');
+  const [engine, setEngine] = useState<'chatgpt' | 'grok'>('grok');
 
   const generate = async () => {
     if (!character.refImage) return;
@@ -307,7 +307,7 @@ function CharacterSheetModal({
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-600">เครื่องมือ:</span>
                 <div className="inline-flex rounded-lg bg-white p-0.5 ring-1 ring-slate-200">
-                  {(['chatgpt', 'grok'] as const).map((e) => (
+                  {(['grok', 'chatgpt'] as const).map((e) => (
                     <button
                       key={e}
                       type="button"
