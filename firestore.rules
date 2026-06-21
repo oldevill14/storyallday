@@ -1,0 +1,9 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ผู้ใช้เข้าถึง/แก้ไขได้เฉพาะข้อมูลใต้ users/{ตัวเอง} เท่านั้น
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+  }
+}

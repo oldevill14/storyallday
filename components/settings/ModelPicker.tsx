@@ -1,15 +1,14 @@
 'use client';
 
 // components/settings/ModelPicker.tsx — searchable OpenRouter model picker with
-// inline pricing. Fetches the public OpenRouter model catalog DIRECTLY from the
-// browser (static export — no /api/openrouter-models route), lets the user filter
+// inline pricing. Fetches /api/openrouter-models on mount, lets the user filter
 // by ฟรี / คุ้มราคา / ทั้งหมด, search by name/id, and pick a model.
 
 import { useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { AlertCircle, Check, Search } from 'lucide-react';
 import { Badge, Spinner } from '@/components/ui';
-import { fetchOpenRouterModels, type OpenRouterModel } from '@/lib/ai';
+import type { OpenRouterModel } from '@/app/api/openrouter-models/route';
 
 export type ModelPickerProps = {
   /** Currently selected model id. */
@@ -58,7 +57,17 @@ export function ModelPicker({ value, onChange }: ModelPickerProps) {
   useEffect(() => {
     let alive = true;
     setState({ status: 'loading' });
-    fetchOpenRouterModels()
+    fetch('/api/openrouter-models')
+      .then(async (res) => {
+        const data = await res.json().catch(() => null);
+        if (!res.ok || !Array.isArray(data)) {
+          const msg =
+            (data && typeof data.error === 'string' && data.error) ||
+            `ดึงรายการโมเดลไม่สำเร็จ (HTTP ${res.status})`;
+          throw new Error(msg);
+        }
+        return data as OpenRouterModel[];
+      })
       .then((models) => {
         if (alive) setState({ status: 'ready', models });
       })

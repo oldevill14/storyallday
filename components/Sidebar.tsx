@@ -6,6 +6,7 @@ import clsx from 'clsx';
 import {
   Home,
   Sparkles,
+  Clapperboard,
   Clock,
   CalendarDays,
   Library,
@@ -28,6 +29,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: '/', label: 'หน้าแรก / AI แนะนำ', icon: Home, badge: 'total' },
+  { href: '/studio', label: 'สตูดิโอละครสั้น', icon: Clapperboard },
   { href: '/approvals', label: 'รออนุมัติ', icon: Clock, badge: 'pending' },
   { href: '/calendar', label: 'ปฏิทินโพสต์', icon: CalendarDays },
   { href: '/library', label: 'คลังโพสต์', icon: Library },
