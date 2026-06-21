@@ -1,36 +1,193 @@
-// lib/ai.ts — Client helpers that talk to the /api/ai proxy and build prompts.
+// lib/ai.ts — Client helpers that call the AI providers DIRECTLY from the browser
+// (no server proxy — the app is a static export). Public function signatures
+// (callAI / suggestAngles / draftPost) are unchanged from the proxy era so pages
+// and the ModelPicker don't need to change.
+//
+// Browser/CORS reality:
+//   - openrouter → allows browser requests (send HTTP-Referer + X-Title).
+//   - gemini     → generativelanguage.googleapis.com allows CORS with ?key=.
+//   - openai / anthropic / zai → block direct browser calls via CORS. We still
+//     attempt the call, but a CORS/network failure is rethrown as a clear Thai
+//     error telling the user to use OpenRouter/Gemini on the deployed site.
 
-import type { AISettings, Angle, Brand } from './types';
+import type { AISettings, Angle, Brand, Provider } from './types';
+
+/** Providers that work directly from a browser (CORS-allowed). */
+const BROWSER_OK: Provider[] = ['openrouter', 'gemini'];
+
+/** Default base URLs per provider (used when settings.baseUrl is empty). */
+const DEFAULT_BASE_URLS: Record<Provider, string> = {
+  openai: 'https://api.openai.com',
+  anthropic: 'https://api.anthropic.com',
+  zai: 'https://api.z.ai/api/anthropic',
+  gemini: 'https://generativelanguage.googleapis.com',
+  openrouter: 'https://openrouter.ai/api/v1',
+};
+
+/** Thrown when a CORS-blocked provider is called from the browser. */
+const CORS_MESSAGE =
+  'provider นี้เรียกตรงจากเบราว์เซอร์ไม่ได้ (CORS) — ใช้ OpenRouter หรือ Gemini สำหรับเว็บที่ deploy แล้ว (provider อื่นใช้ได้ตอน npm run dev เท่านั้น)';
+
+/** Pull a human-readable error message out of an unknown provider payload. */
+function extractProviderError(payload: unknown, fallback: string): string {
+  if (!payload || typeof payload !== 'object') return fallback;
+  const p = payload as Record<string, unknown>;
+  const err = p.error;
+  if (typeof err === 'string') return err;
+  if (err && typeof err === 'object') {
+    const m = (err as Record<string, unknown>).message;
+    if (typeof m === 'string') return m;
+  }
+  if (typeof p.message === 'string') return p.message;
+  return fallback;
+}
+
+/** `location.origin` if available (browser), else a stable fallback. */
+function originHeader(): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
+  }
+  return 'https://oldevill14.github.io';
+}
 
 /**
- * Low-level call to the AI proxy. POSTs settings + a single user message and
- * returns the normalized text. Throws on { error } or network failure.
+ * Low-level call to an AI provider — now DIRECT from the browser (no /api/ai).
+ * Sends settings + a single user message and returns the normalized text.
+ * Throws a clear Error on validation, CORS/network, provider, or empty result.
  */
 export async function callAI(
   opts: { system?: string; prompt: string },
   settings: AISettings
 ): Promise<string> {
-  const res = await fetch('/api/ai', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      provider: settings.provider,
-      apiKey: settings.apiKey,
-      model: settings.model,
-      baseUrl: settings.baseUrl || undefined,
-      system: opts.system,
-      messages: [{ role: 'user', content: opts.prompt }],
-    }),
-  });
+  const provider = settings.provider;
+  if (!provider || !DEFAULT_BASE_URLS[provider]) {
+    throw new Error(`ไม่รู้จัก provider: ${String(provider)}`);
+  }
+  if (!settings.apiKey || !settings.apiKey.trim()) {
+    throw new Error('ยังไม่ได้ตั้งค่า API key — ตั้งค่า API key ในหน้าตั้งค่าก่อน');
+  }
+  if (!settings.model || !settings.model.trim()) {
+    throw new Error('ยังไม่ได้เลือกโมเดล (model)');
+  }
+
+  const apiKey = settings.apiKey.trim();
+  const model = settings.model.trim();
+  const base =
+    (settings.baseUrl && settings.baseUrl.trim()) || DEFAULT_BASE_URLS[provider];
+  const { system } = opts;
+  const messages = [{ role: 'user' as const, content: opts.prompt }];
+
+  let url: string;
+  let headers: Record<string, string>;
+  let payload: unknown;
+
+  if (provider === 'openrouter') {
+    // OpenRouter is OpenAI-compatible and allows browser requests.
+    // Its base URL already ends in `/v1`, so append `/chat/completions`.
+    url = `${base}/chat/completions`;
+    headers = {
+      'content-type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+      'HTTP-Referer': originHeader(),
+      'X-Title': 'Story AI',
+    };
+    payload = {
+      model,
+      messages: [
+        ...(system ? [{ role: 'system', content: system }] : []),
+        ...messages,
+      ],
+    };
+  } else if (provider === 'gemini') {
+    url = `${base}/v1beta/models/${encodeURIComponent(
+      model
+    )}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    headers = { 'content-type': 'application/json' };
+    payload = {
+      ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+      contents: messages.map((m) => ({
+        role: 'user',
+        parts: [{ text: m.content }],
+      })),
+    };
+  } else if (provider === 'openai') {
+    url = `${base}/v1/chat/completions`;
+    headers = {
+      'content-type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    };
+    payload = {
+      model,
+      messages: [
+        ...(system ? [{ role: 'system', content: system }] : []),
+        ...messages,
+      ],
+    };
+  } else {
+    // anthropic | zai — Anthropic Messages API shape.
+    url = `${base}/v1/messages`;
+    headers = {
+      'content-type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      // Opt-in header some Anthropic-compatible gateways require for browsers.
+      'anthropic-dangerous-direct-browser-access': 'true',
+    };
+    payload = {
+      model,
+      max_tokens: 2048,
+      ...(system ? { system } : {}),
+      messages,
+    };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    // A TypeError("Failed to fetch") here is almost always a CORS preflight
+    // rejection (openai/anthropic/zai) or a real network outage. Give the
+    // CORS-blocked providers a precise, actionable Thai message.
+    if (!BROWSER_OK.includes(provider)) {
+      throw new Error(CORS_MESSAGE);
+    }
+    throw new Error(
+      e instanceof Error
+        ? `เชื่อมต่อผู้ให้บริการ AI ไม่สำเร็จ: ${e.message}`
+        : 'เชื่อมต่อผู้ให้บริการ AI ไม่สำเร็จ'
+    );
+  }
 
   const data = await res.json().catch(() => null);
-  if (!res.ok || !data || typeof data.text !== 'string') {
-    const msg =
-      (data && typeof data.error === 'string' && data.error) ||
-      `เรียก AI ไม่สำเร็จ (HTTP ${res.status})`;
+
+  if (!res.ok) {
+    const msg = extractProviderError(data, `เรียก AI ไม่สำเร็จ (HTTP ${res.status})`);
     throw new Error(msg);
   }
-  return data.text;
+
+  let text = '';
+  if (provider === 'openai' || provider === 'openrouter') {
+    text = data?.choices?.[0]?.message?.content ?? '';
+  } else if (provider === 'anthropic' || provider === 'zai') {
+    text = (data?.content ?? [])
+      .filter((c: { type?: string }) => c?.type === 'text')
+      .map((c: { text?: string }) => c?.text ?? '')
+      .join('');
+  } else {
+    // gemini
+    text = (data?.candidates?.[0]?.content?.parts ?? [])
+      .map((p: { text?: string }) => p?.text ?? '')
+      .join('');
+  }
+
+  if (!text) {
+    throw new Error('AI ตอบกลับว่างเปล่า ลองอีกครั้ง');
+  }
+  return text;
 }
 
 /**
@@ -199,4 +356,74 @@ ${brandBlock(brand)}
     hashtags,
     imageIdea: String(o.imageIdea ?? '').trim(),
   };
+}
+
+// ───────────────────────── OpenRouter model catalog ─────────────────────────
+// Previously served by app/api/openrouter-models/route.ts (now deleted for the
+// static export). The catalog endpoint is public + CORS-friendly, so the
+// ModelPicker fetches it directly via fetchOpenRouterModels().
+
+/** A single model row as consumed by the client picker. */
+export type OpenRouterModel = {
+  id: string;
+  name: string;
+  context_length: number;
+  /** USD per token for input — Number(pricing.prompt). "-1" → variable. */
+  promptPrice: number;
+  /** USD per token for output — Number(pricing.completion). */
+  completionPrice: number;
+  /** Free if id ends with ":free" or the prompt price string is exactly "0". */
+  free: boolean;
+  description: string;
+};
+
+type RawOpenRouterModel = {
+  id?: string;
+  name?: string;
+  context_length?: number;
+  description?: string;
+  pricing?: { prompt?: string; completion?: string };
+};
+
+/**
+ * Fetch + map the public OpenRouter model catalog directly from the browser.
+ * Throws a clear Thai Error on network/HTTP failure.
+ */
+export async function fetchOpenRouterModels(): Promise<OpenRouterModel[]> {
+  let res: Response;
+  try {
+    res = await fetch('https://openrouter.ai/api/v1/models', {
+      headers: { accept: 'application/json' },
+    });
+  } catch (e) {
+    throw new Error(
+      e instanceof Error
+        ? `ดึงรายการโมเดลจาก OpenRouter ไม่สำเร็จ: ${e.message}`
+        : 'ดึงรายการโมเดลจาก OpenRouter ไม่สำเร็จ'
+    );
+  }
+
+  if (!res.ok) {
+    throw new Error(`ดึงรายการโมเดลไม่สำเร็จ (HTTP ${res.status})`);
+  }
+
+  const data = (await res.json().catch(() => null)) as {
+    data?: RawOpenRouterModel[];
+  } | null;
+  const raw = Array.isArray(data?.data) ? data.data : [];
+
+  return raw.map((m) => {
+    const id = String(m.id ?? '');
+    const promptStr = m.pricing?.prompt ?? '0';
+    const completionStr = m.pricing?.completion ?? '0';
+    return {
+      id,
+      name: String(m.name ?? id),
+      context_length: Number(m.context_length ?? 0),
+      promptPrice: Number(promptStr),
+      completionPrice: Number(completionStr),
+      free: id.endsWith(':free') || promptStr === '0',
+      description: String(m.description ?? ''),
+    };
+  });
 }

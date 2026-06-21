@@ -230,6 +230,19 @@ export default function SettingsPage() {
             />
           ))}
         </div>
+
+        {/* Deployed-site (GitHub Pages) provider note — AI runs in the browser */}
+        <div className="mt-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <Globe className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          <p className="text-sm leading-relaxed text-amber-800">
+            บนเว็บที่ deploy แล้ว (GitHub Pages) AI ถูกเรียก{' '}
+            <span className="font-medium">ตรงจากเบราว์เซอร์</span> จึงใช้ได้เฉพาะ{' '}
+            <span className="font-medium">OpenRouter</span> และ{' '}
+            <span className="font-medium">Gemini</span> เท่านั้น — ส่วน OpenAI /
+            Anthropic / GLM (z.ai) ถูกบล็อกด้วย CORS ใช้ได้เฉพาะตอนรันในเครื่อง
+            (<span className="font-mono text-xs">npm run dev</span>)
+          </p>
+        </div>
       </Card>
 
       {/* Connection details */}
@@ -440,8 +453,8 @@ export default function SettingsPage() {
             <p className="text-sm leading-relaxed text-slate-600">
               API Key ของคุณถูกเก็บไว้ใน{' '}
               <span className="font-medium text-slate-800">localStorage บนเครื่องของคุณเท่านั้น</span>{' '}
-              — ไม่ถูกส่งหรือบันทึกไว้บนเซิร์ฟเวอร์ของเรา เมื่อเรียกใช้ AI คีย์จะถูกส่งผ่าน
-              proxy ของแอปไปยังผู้ให้บริการที่คุณเลือกโดยตรงเท่านั้น หากใช้เครื่องสาธารณะ
+              — ไม่มีเซิร์ฟเวอร์ของเราอยู่ตรงกลาง เมื่อเรียกใช้ AI เบราว์เซอร์จะส่งคีย์ไปยัง
+              ผู้ให้บริการที่คุณเลือก (เช่น OpenRouter / Gemini) โดยตรงเท่านั้น หากใช้เครื่องสาธารณะ
               แนะนำให้ลบคีย์ออกหลังใช้งาน
             </p>
           </div>
