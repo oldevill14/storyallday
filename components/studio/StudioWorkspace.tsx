@@ -291,63 +291,69 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     }));
   };
 
-  // First selected character that has a reference image — locks the look via
-  // image-to-image when generating scene visuals/clips.
-  const charRefImage = (): string | undefined =>
-    characters.find((c) => selectedCharacterIds.includes(c.id) && c.refImage)?.refImage;
-
-  // Reference block describing the SELECTED character(s) + product — prepended to
-  // copied prompts and embedded in the exported JSON, so a prompt used outside the
-  // app (วางใน Grok/ChatGPT เอง) still references the chosen cast/refs.
-  const copyRefContext = (() => {
-    const selected = characters.filter((c) => selectedCharacterIds.includes(c.id));
-    const lines: string[] = [];
-    if (selected.length) {
-      const anyRef = selected.some((c) => c.refImage);
-      lines.push(
-        `Characters (keep each one's identity, face, hair and outfit identical in every scene${
-          anyRef ? '; reference image(s) attached — match exactly' : ''
-        }):`,
-      );
-      for (const c of selected) {
-        lines.push(
-          `- ${c.name || 'character'}: ${characterPromptBlock(c)}${c.refImage ? ' [has reference image]' : ''}`,
-        );
+  // Ordered reference entities = selected characters (IN SELECTION ORDER) then the
+  // product. This order defines the reference-image order: image 1 = first character,
+  // image 2 = second character, … and the product (if any) is the LAST reference image.
+  const refEntities: { kind: 'character' | 'product'; name: string; desc: string; img?: string }[] =
+    (() => {
+      const out: { kind: 'character' | 'product'; name: string; desc: string; img?: string }[] = [];
+      for (const id of selectedCharacterIds) {
+        const c = characters.find((x) => x.id === id);
+        if (c)
+          out.push({ kind: 'character', name: c.name || 'ตัวละคร', desc: characterPromptBlock(c), img: c.refImage });
       }
-    }
-    if (isSales && (form.productName.trim() || form.productDetail.trim())) {
-      const p = `${form.productName.trim()} ${form.productDetail.trim()}`.trim();
-      lines.push(
-        `Product to feature: ${p}${
-          form.productImage ? ' [product reference image attached — show this exact product]' : ''
-        }`,
-      );
-    }
-    return lines.join('\n');
+      if (isSales && (form.productName.trim() || form.productDetail.trim() || form.productImage)) {
+        out.push({
+          kind: 'product',
+          name: form.productName.trim() || 'สินค้า',
+          desc: `${form.productName.trim()} ${form.productDetail.trim()}`.trim(),
+          img: form.productImage,
+        });
+      }
+      return out;
+    })();
+
+  // Ordered list of ref-image data-urls (characters in order, then product).
+  const refImageList = refEntities.filter((e) => e.img).map((e) => e.img as string);
+
+  // Text descriptions (always included so the look is known even without ref images).
+  const castText = refEntities.length
+    ? [
+        'Keep these consistent in EVERY scene:',
+        ...refEntities.map((e) => `- ${e.kind} "${e.name}": ${e.desc}`),
+      ].join('\n')
+    : '';
+
+  // Reference-image ORDERING note — only the entities that actually have a ref image.
+  const refOrderNote = (() => {
+    const withImg = refEntities.filter((e) => e.img);
+    if (!withImg.length) return '';
+    return [
+      'Reference images — attach and use in THIS exact order (do not reorder or swap):',
+      ...withImg.map(
+        (e, i) =>
+          `- image ${i + 1} = ${e.kind} "${e.name}" — match it exactly (${
+            e.kind === 'product' ? 'same shape/label/colors' : 'same face/hair/outfit/identity'
+          })`,
+      ),
+      'Conditions: characters come first in this order; the product (if any) is the LAST image. Place all referenced characters and the product together naturally in the same scene; keep each one identical to its own image in every scene.',
+    ].join('\n');
   })();
+
+  // For copy buttons + exported JSON (the user attaches the ref images themselves).
+  const copyRefContext = [castText, refOrderNote].filter(Boolean).join('\n\n');
 
   const genImage = async (key: string, scene: Scene) => {
     const provider = media[key]?.imageProvider ?? 'grok';
     // Lock face/product via image-to-image only when the per-scene toggle is on
     // (default) AND references exist; otherwise fast text-to-image.
     const lockRef = media[key]?.lockRef ?? true;
-    const charRef = charRefImage();
-    const prodRef = isSales ? form.productImage : undefined;
-    const allRefs = [charRef, prodRef].filter(Boolean) as string[];
-    const useRefs = lockRef && allRefs.length > 0;
-    const refs = useRefs ? allRefs : [];
-    let refNote = '';
-    if (useRefs && charRef && prodRef) {
-      refNote =
-        'Reference images: image 1 = the character (keep identity, face, hair and outfit consistent); image 2 = the product (show this EXACT product, same shape/label/colors). Place the character and the product together naturally in the same scene — the character presenting/holding/using the product.';
-    } else if (useRefs && charRef) {
-      refNote = 'Reference image = the character — keep identity, face and outfit consistent.';
-    } else if (useRefs && prodRef) {
-      refNote = 'Reference image = the product — feature this exact product in the scene.';
-    }
-    // Always reference the selected character(s)/product in the prompt — both as a
-    // text description (copyRefContext) and, when ref images exist, the image note.
-    const prompt = [copyRefContext, refNote, scene.visualPrompt].filter(Boolean).join('\n\n');
+    // Lock the look via image-to-image (in order) only when the toggle is on AND refs
+    // exist; otherwise fast text-to-image (still carries the cast text descriptions).
+    const useRefs = lockRef && refImageList.length > 0;
+    const refs = useRefs ? refImageList : [];
+    const refBlock = useRefs ? copyRefContext : castText;
+    const prompt = [refBlock, scene.visualPrompt].filter(Boolean).join('\n\n');
     patchMedia(key, { imageStatus: 'loading', imageError: undefined });
     try {
       const dataUrl = await postGenerate('/api/generate-image', {
@@ -614,7 +620,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
                       scene={scene}
                       aspectRatio={form.aspectRatio}
                       copyRefContext={copyRefContext}
-                      hasRefs={!!charRefImage() || (isSales && !!form.productImage)}
+                      hasRefs={refImageList.length > 0}
                       media={media[key] ?? emptyMedia()}
                       onSceneChange={(patch) => patchScene(epIndex, sceneIdx, patch)}
                       onMediaChange={(patch) => patchMedia(key, patch)}
