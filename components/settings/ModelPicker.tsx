@@ -13,7 +13,19 @@ import clsx from 'clsx';
 import { AlertCircle, Check, KeyRound, Search } from 'lucide-react';
 import { Badge, Spinner } from '@/components/ui';
 import type { Provider } from '@/lib/types';
-import type { ModelOption } from '@/app/api/models/route';
+
+// (static build) — the /api/models route was removed; the model list isn't fetched
+// on the web build, so define the shape locally and let users type the model id.
+export type ModelOption = {
+  id: string;
+  name: string;
+  free: boolean;
+  pricingKnown: boolean;
+  promptPrice: number;
+  completionPrice: number;
+  context_length: number;
+  approx?: boolean;
+};
 
 export type ModelPickerProps = {
   provider: Provider;

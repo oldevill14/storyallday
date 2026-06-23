@@ -12,33 +12,128 @@ export type AIConnection = Pick<
  * Low-level call to the AI proxy. POSTs settings + a single user message and
  * returns the normalized text. Throws on { error } or network failure.
  */
+const DEFAULT_BASE_URLS: Record<string, string> = {
+  openai: 'https://api.openai.com',
+  anthropic: 'https://api.anthropic.com',
+  zai: 'https://api.z.ai/api/anthropic',
+  gemini: 'https://generativelanguage.googleapis.com',
+  openrouter: 'https://openrouter.ai/api/v1',
+  cli: 'local',
+};
+
+function parseDataUrl(d: string): { mediaType: string; data: string } | null {
+  const m = /^data:([^;]+);base64,(.+)$/.exec(d);
+  return m ? { mediaType: m[1], data: m[2] } : null;
+}
+
+/**
+ * Static build: call the configured provider DIRECTLY from the browser using the
+ * user's own API key (no server proxy). CORS note — Gemini / OpenRouter / Anthropic
+ * (+ z.ai with the direct-browser header) work from the browser; OpenAI blocks CORS;
+ * the `cli` subscription mode only works when running on the local machine.
+ */
 export async function callAI(
   opts: { system?: string; prompt: string; image?: string },
   settings: AIConnection
 ): Promise<string> {
-  const res = await fetch('/api/ai', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      provider: settings.provider,
-      apiKey: settings.apiKey,
-      model: settings.model,
-      baseUrl: settings.baseUrl || undefined,
-      system: opts.system,
-      messages: [{ role: 'user', content: opts.prompt }],
-      image: opts.image,
-    }),
-  });
+  const provider = settings.provider;
+  const apiKey = (settings.apiKey || '').trim();
+  const model = settings.model;
+  const base = (settings.baseUrl && settings.baseUrl.trim()) || DEFAULT_BASE_URLS[provider] || '';
+  const system = opts.system;
+  const userText = opts.prompt;
+  const img = opts.image ? parseDataUrl(opts.image) : null;
 
-  const data = await res.json().catch(() => null);
-  if (!res.ok || !data || typeof data.text !== 'string') {
-    const msg =
-      (data && typeof data.error === 'string' && data.error) ||
-      `เรียก AI ไม่สำเร็จ (HTTP ${res.status})`;
-    // Friendly Thai for the common account-side failures (no quota/billing/etc).
-    throw new Error(humanizeAIError(msg));
+  if (provider === 'cli') {
+    throw new Error(
+      'โหมด CLI (subscription) ใช้ได้เฉพาะตอนรันบนเครื่อง — บนเว็บนี้ให้เลือก provider (Gemini / OpenRouter / z.ai / Anthropic) แล้วใส่ API Key ของบัญชีคุณในหน้าตั้งค่า',
+    );
   }
-  return data.text;
+  if (!apiKey) {
+    throw new Error('ยังไม่ได้ใส่ API Key — ไปที่หน้าตั้งค่าเพื่อกรอกคีย์ของบัญชีคุณก่อน');
+  }
+
+  let url = '';
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  let payload: unknown;
+
+  if (provider === 'openai' || provider === 'openrouter') {
+    url = provider === 'openai' ? `${base}/v1/chat/completions` : `${base}/chat/completions`;
+    headers.Authorization = `Bearer ${apiKey}`;
+    if (provider === 'openrouter') {
+      headers['HTTP-Referer'] = typeof location !== 'undefined' ? location.origin : 'https://story-ai';
+      headers['X-Title'] = 'Story AI';
+    }
+    const content = img
+      ? [
+          { type: 'text', text: userText },
+          { type: 'image_url', image_url: { url: opts.image } },
+        ]
+      : userText;
+    payload = {
+      model,
+      messages: [...(system ? [{ role: 'system', content: system }] : []), { role: 'user', content }],
+    };
+  } else if (provider === 'anthropic' || provider === 'zai') {
+    url = `${base}/v1/messages`;
+    headers['x-api-key'] = apiKey;
+    headers['anthropic-version'] = '2023-06-01';
+    headers['anthropic-dangerous-direct-browser-access'] = 'true';
+    const content = img
+      ? [
+          { type: 'text', text: userText },
+          { type: 'image', source: { type: 'base64', media_type: img.mediaType, data: img.data } },
+        ]
+      : userText;
+    payload = {
+      model,
+      max_tokens: 8192,
+      ...(system ? { system } : {}),
+      messages: [{ role: 'user', content }],
+    };
+  } else {
+    // gemini
+    url = `${base}/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const parts: unknown[] = [{ text: userText }];
+    if (img) parts.push({ inline_data: { mime_type: img.mediaType, data: img.data } });
+    payload = {
+      ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+      contents: [{ role: 'user', parts }],
+    };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload) });
+  } catch {
+    throw new Error(
+      humanizeAIError(
+        `เรียก ${provider} จากเบราว์เซอร์ไม่สำเร็จ (อาจติด CORS) — ลองใช้ Gemini / OpenRouter / z.ai`,
+      ),
+    );
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const raw =
+      (data && (data.error?.message || (typeof data.error === 'string' && data.error) || data.message)) ||
+      `HTTP ${res.status}`;
+    throw new Error(humanizeAIError(String(raw)));
+  }
+  let text = '';
+  if (provider === 'openai' || provider === 'openrouter') {
+    text = data?.choices?.[0]?.message?.content ?? '';
+  } else if (provider === 'anthropic' || provider === 'zai') {
+    text = (data?.content ?? [])
+      .filter((c: { type?: string }) => c?.type === 'text')
+      .map((c: { text?: string }) => c?.text ?? '')
+      .join('');
+  } else {
+    text = (data?.candidates?.[0]?.content?.parts ?? [])
+      .map((p: { text?: string }) => p?.text ?? '')
+      .join('');
+  }
+  if (!text) throw new Error('AI ตอบกลับว่างเปล่า ลองอีกครั้ง');
+  return text;
 }
 
 /**
