@@ -9,8 +9,17 @@ import {
   type StudioForm,
 } from './types';
 
-/** Build a Grok-agent-ready storyboard object from a generated drama + the form. */
-export function buildGrokStoryboard(drama: Drama, form: StudioForm, isSales: boolean) {
+/**
+ * Build a Grok-agent-ready storyboard object from a generated drama + the form.
+ * `refContext` = a reference block describing the selected character(s)/product
+ * (kept in continuity so every scene references the same cast/refs).
+ */
+export function buildGrokStoryboard(
+  drama: Drama,
+  form: StudioForm,
+  isSales: boolean,
+  refContext?: string,
+) {
   const scenes: Array<Record<string, unknown>> = [];
   let order = 0;
   for (const epi of drama.episodes) {
@@ -56,6 +65,7 @@ export function buildGrokStoryboard(drama: Drama, form: StudioForm, isSales: boo
     continuity: {
       characters: drama.characters.map((c) => ({ name: c.name, description: c.description })),
       style_lock: `Keep the "${form.style}" visual style and every character's identity, face and outfit identical across all scenes. The Thai spoken line is embedded in each video_prompt in quotes.`,
+      ...(refContext && refContext.trim() ? { reference: refContext.trim() } : {}),
     },
     scenes,
     assembly: {

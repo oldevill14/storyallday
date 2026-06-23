@@ -52,6 +52,7 @@ import {
 import {
   emptyMedia,
   sceneKey,
+  videoPromptWithDialogue,
   SALES_STYLE_META,
   type Drama,
   type SceneMedia,
@@ -295,6 +296,36 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
   const charRefImage = (): string | undefined =>
     characters.find((c) => selectedCharacterIds.includes(c.id) && c.refImage)?.refImage;
 
+  // Reference block describing the SELECTED character(s) + product — prepended to
+  // copied prompts and embedded in the exported JSON, so a prompt used outside the
+  // app (วางใน Grok/ChatGPT เอง) still references the chosen cast/refs.
+  const copyRefContext = (() => {
+    const selected = characters.filter((c) => selectedCharacterIds.includes(c.id));
+    const lines: string[] = [];
+    if (selected.length) {
+      const anyRef = selected.some((c) => c.refImage);
+      lines.push(
+        `Characters (keep each one's identity, face, hair and outfit identical in every scene${
+          anyRef ? '; reference image(s) attached — match exactly' : ''
+        }):`,
+      );
+      for (const c of selected) {
+        lines.push(
+          `- ${c.name || 'character'}: ${characterPromptBlock(c)}${c.refImage ? ' [has reference image]' : ''}`,
+        );
+      }
+    }
+    if (isSales && (form.productName.trim() || form.productDetail.trim())) {
+      const p = `${form.productName.trim()} ${form.productDetail.trim()}`.trim();
+      lines.push(
+        `Product to feature: ${p}${
+          form.productImage ? ' [product reference image attached — show this exact product]' : ''
+        }`,
+      );
+    }
+    return lines.join('\n');
+  })();
+
   const genImage = async (key: string, scene: Scene) => {
     const provider = media[key]?.imageProvider ?? 'grok';
     // Lock face/product via image-to-image only when the per-scene toggle is on
@@ -314,7 +345,9 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     } else if (useRefs && prodRef) {
       refNote = 'Reference image = the product — feature this exact product in the scene.';
     }
-    const prompt = refNote ? `${refNote}\n\n${scene.visualPrompt}` : scene.visualPrompt;
+    // Always reference the selected character(s)/product in the prompt — both as a
+    // text description (copyRefContext) and, when ref images exist, the image note.
+    const prompt = [copyRefContext, refNote, scene.visualPrompt].filter(Boolean).join('\n\n');
     patchMedia(key, { imageStatus: 'loading', imageError: undefined });
     try {
       const dataUrl = await postGenerate('/api/generate-image', {
@@ -337,8 +370,11 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     const startFrame = media[key]?.imageDataUrl;
     patchMedia(key, { videoStatus: 'loading', videoError: undefined });
     try {
+      const videoPrompt = [copyRefContext, videoPromptWithDialogue(scene)]
+        .filter(Boolean)
+        .join('\n\n');
       const dataUrl = await postGenerate('/api/generate-video', {
-        prompt: scene.videoPrompt,
+        prompt: videoPrompt,
         tool: 'grok',
         refImage: startFrame,
       });
@@ -428,7 +464,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
   // ready to hand to Grok to generate clips (image-to-video per scene, joined).
   const onDownloadJson = () => {
     if (!drama) return;
-    const storyboard = buildGrokStoryboard(drama, form, isSales);
+    const storyboard = buildGrokStoryboard(drama, form, isSales, copyRefContext);
     const safe =
       (drama.title || 'storyboard')
         .replace(/[^\w฀-๿]+/g, '_')
@@ -577,6 +613,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
                       sceneIndex={sceneIdx}
                       scene={scene}
                       aspectRatio={form.aspectRatio}
+                      copyRefContext={copyRefContext}
                       hasRefs={!!charRefImage() || (isSales && !!form.productImage)}
                       media={media[key] ?? emptyMedia()}
                       onSceneChange={(patch) => patchScene(epIndex, sceneIdx, patch)}
@@ -591,6 +628,19 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
               </div>
             </div>
           ))}
+
+          {/* ด้านล่าง: ดาวน์โหลด JSON รวมทุก ep/scene สำหรับสั่ง Grok agent */}
+          <Card className="flex flex-col items-center gap-2.5 border-violet-200 bg-gradient-to-br from-violet-50 to-blue-50/50 py-7 text-center">
+            <p className="text-sm font-semibold text-slate-700">
+              รวมทุกตอน/ฉากเป็นไฟล์ JSON เดียว — สำหรับสั่ง Grok agent ให้สร้างคลิป
+            </p>
+            <Button icon={<FileJson className="h-5 w-5" />} onClick={onDownloadJson}>
+              ดาวน์โหลด JSON (Grok agent)
+            </Button>
+            <p className="text-[11px] text-slate-400">
+              ไฟล์มี: project · ตัวละคร/อ้างอิงที่เลือก · ทุก scene (prompt ภาพ/วิดีโอ + บทพูด) · assembly
+            </p>
+          </Card>
         </div>
       )}
 
