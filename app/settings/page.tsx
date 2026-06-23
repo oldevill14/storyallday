@@ -320,6 +320,24 @@ export default function SettingsPage() {
           </div>
           )}
 
+          {/* Sync keys to the account (Firestore) — opt-in, default OFF */}
+          <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+            <input
+              type="checkbox"
+              checked={!!settings.syncKeys}
+              onChange={(e) => setSettings({ syncKeys: e.target.checked })}
+              className="mt-0.5 h-4 w-4 accent-violet-600"
+            />
+            <span className="text-xs leading-relaxed text-slate-600">
+              <span className="font-semibold text-slate-700">ซิงค์ API key ข้ามอุปกรณ์</span> —
+              เก็บคีย์ไว้ในบัญชีของคุณ (Firestore) ให้ตามไปทุกเครื่องที่ล็อกอินบัญชีนี้
+              <span className="mt-0.5 block text-[11px] text-slate-400">
+                ปิด (แนะนำ) = คีย์อยู่ในเครื่องนี้เท่านั้น ปลอดภัยสุด · เปิด =
+                เก็บคีย์ในฐานข้อมูลบัญชี (สะดวกข้ามเครื่อง)
+              </span>
+            </span>
+          </label>
+
           {/* Model */}
           <div>
             <label

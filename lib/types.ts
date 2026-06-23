@@ -67,6 +67,12 @@ export type AISettings = {
   model: string;
   baseUrl?: string;
   keys: Record<Provider, ProviderConfig>;
+  /**
+   * Opt-in: sync the per-provider API keys to the signed-in user's Firestore doc
+   * (`users/{uid}.aiSettings`) so they follow the account across devices. Default
+   * OFF = keys stay device-local (safer — never leave the device). Per device.
+   */
+  syncKeys?: boolean;
 };
 
 /** Built-in default model id per provider (used to seed empty configs). */

@@ -148,34 +148,34 @@ export const useStore = create<StoreState>()(
       // settings stays local (persisted) — no Firestore.
       // Per-provider aware: writes the (post-patch) active config into
       // keys[provider] so switching providers never clobbers another's key.
-      setSettings: (patch) =>
-        set((s) => {
-          const cur = s.settings;
-          const keys = cur.keys ?? emptyKeys();
-          const provider = patch.provider ?? cur.provider;
-          const switching = provider !== cur.provider;
-          const saved =
-            keys[provider] ?? {
-              apiKey: '',
-              model: DEFAULT_MODEL[provider],
-              baseUrl: '',
-            };
-          // Baseline = the target provider's saved config when switching,
-          // otherwise the current active values.
-          const baseApiKey = switching ? saved.apiKey : cur.apiKey;
-          const baseModel = switching ? saved.model : cur.model;
-          const baseBaseUrl = switching
-            ? saved.baseUrl ?? ''
-            : cur.baseUrl ?? '';
-          const apiKey = patch.apiKey ?? baseApiKey;
-          const model = patch.model ?? baseModel;
-          const baseUrl = patch.baseUrl ?? baseBaseUrl;
-          const nextKeys = {
-            ...keys,
-            [provider]: { apiKey, model, baseUrl },
-          };
-          return { settings: { provider, apiKey, model, baseUrl, keys: nextKeys } };
-        }),
+      setSettings: (patch) => {
+        const cur = get().settings;
+        const keys = cur.keys ?? emptyKeys();
+        const provider = patch.provider ?? cur.provider;
+        const switching = provider !== cur.provider;
+        const saved =
+          keys[provider] ?? { apiKey: '', model: DEFAULT_MODEL[provider], baseUrl: '' };
+        // Baseline = the target provider's saved config when switching, else the
+        // current active values.
+        const baseApiKey = switching ? saved.apiKey : cur.apiKey;
+        const baseModel = switching ? saved.model : cur.model;
+        const baseBaseUrl = switching ? saved.baseUrl ?? '' : cur.baseUrl ?? '';
+        const apiKey = patch.apiKey ?? baseApiKey;
+        const model = patch.model ?? baseModel;
+        const baseUrl = patch.baseUrl ?? baseBaseUrl;
+        const nextKeys = { ...keys, [provider]: { apiKey, model, baseUrl } };
+        const syncKeys = patch.syncKeys ?? cur.syncKeys ?? false;
+        set({ settings: { provider, apiKey, model, baseUrl, keys: nextKeys, syncKeys } });
+        // Opt-in cloud sync: mirror the per-provider keys to the signed-in user's
+        // Firestore doc so they follow the account across devices.
+        if (syncKeys && currentUid) {
+          void setDoc(
+            userDocRef(currentUid),
+            { aiSettings: { provider, model, baseUrl, keys: nextKeys } },
+            { merge: true },
+          );
+        }
+      },
 
       // brand → users/{uid} doc, field `brand`. Optimistic local merge, then
       // persist to Firestore (snapshot will reconcile).
@@ -455,9 +455,33 @@ function attachUserSync(uid: string) {
   unsubBrand = onSnapshot(
     userDocRef(uid),
     (snap) => {
-      const data = snap.data() as { brand?: Brand; email?: string } | undefined;
+      const data = snap.data() as
+        | {
+            brand?: Brand;
+            email?: string;
+            aiSettings?: { provider?: Provider; keys?: Record<Provider, ProviderConfig> };
+          }
+        | undefined;
       useStore.setState({ brand: data?.brand ?? seedBrand });
       updateMe(uid, { email: auth.currentUser?.email ?? data?.email ?? '' });
+      // Pull cloud-synced AI keys IF this device opted into sync (settings.syncKeys).
+      const local = useStore.getState().settings;
+      if (local.syncKeys && data?.aiSettings?.keys) {
+        const cloud = data.aiSettings;
+        const prov = (cloud.provider as Provider) ?? local.provider;
+        const mergedKeys = { ...emptyKeys(), ...cloud.keys };
+        const active = mergedKeys[prov] ?? { apiKey: '', model: DEFAULT_MODEL[prov], baseUrl: '' };
+        useStore.setState({
+          settings: {
+            ...local,
+            provider: prov,
+            apiKey: active.apiKey,
+            model: active.model,
+            baseUrl: active.baseUrl ?? '',
+            keys: mergedKeys,
+          },
+        });
+      }
       gotBrandSnap = true;
       maybeMarkDataResolved();
     },
