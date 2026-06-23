@@ -20,6 +20,11 @@ import { Badge, Button, Spinner } from '@/components/ui';
 import { videoPromptWithDialogue } from './types';
 import type { ImageProvider, Scene, SceneMedia } from './types';
 
+// Static (prompt-only) build hides in-app image/video generation — there's no
+// server/ai-flow on GitHub Pages. Users copy the prompt / download JSON instead.
+// Set NEXT_PUBLIC_GEN_ENABLED=1 to re-enable (local full build).
+const GEN_ENABLED = process.env.NEXT_PUBLIC_GEN_ENABLED === '1';
+
 type Props = {
   ep: number;
   sceneIndex: number;
@@ -123,7 +128,7 @@ export function SceneCard({
         </span>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className={'grid grid-cols-1 gap-4' + (GEN_ENABLED ? ' lg:grid-cols-2' : '')}>
         {/* Left: text + editable fields */}
         <div className="space-y-3">
           {/* Setting (read-only) */}
@@ -217,7 +222,8 @@ export function SceneCard({
 
           {/* Controls — grouped by category */}
           <div className="space-y-2.5 pt-1">
-            {/* หมวด: สร้างสื่อ */}
+            {/* หมวด: สร้างสื่อ (ซ่อนในเวอร์ชัน prompt-only / static) */}
+            {GEN_ENABLED && (
             <div className="flex flex-wrap items-center gap-2">
               <div className="inline-flex items-center gap-1.5">
                 <span className="text-[11px] font-medium text-slate-400">ภาพ:</span>
@@ -293,6 +299,7 @@ export function SceneCard({
                 สร้างวิดีโอ
               </Button>
             </div>
+            )}
 
             {/* หมวด: คัดลอก prompt (ไปสร้างเองนอกระบบ) */}
             <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 pt-2">
@@ -303,7 +310,7 @@ export function SceneCard({
               <CopyBtn text={withRef(copyRefContext, videoPromptWithDialogue(scene))} label="วิดีโอ" />
             </div>
 
-            {!media.imageDataUrl && (
+            {GEN_ENABLED && !media.imageDataUrl && (
               <p className="text-[11px] text-slate-400">
                 💡 สร้าง <span className="font-medium text-slate-500">รูปภาพ</span> ก่อน
                 จึงจะสร้างวิดีโอ (จากรูปนั้น) ได้
@@ -312,7 +319,8 @@ export function SceneCard({
           </div>
         </div>
 
-        {/* Right: preview area (9:16) */}
+        {/* Right: preview area (9:16) — hidden in prompt-only/static build */}
+        {GEN_ENABLED && (
         <div className="flex flex-col gap-2">
           <div
             className={
@@ -393,6 +401,7 @@ export function SceneCard({
             </p>
           )}
         </div>
+        )}
       </div>
     </div>
   );

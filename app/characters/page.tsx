@@ -242,6 +242,9 @@ function CharacterSheetModal({
   onClose: () => void;
 }) {
   const prompt = buildCharacterSheetPrompt(character);
+  // Static (prompt-only) build: hide auto-generate (ai-flow image gen); keep the
+  // copy-prompt path so users paste it into ChatGPT/Grok with the ref image.
+  const GEN_ENABLED = process.env.NEXT_PUBLIC_GEN_ENABLED === '1';
   const [copied, setCopied] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -302,7 +305,7 @@ function CharacterSheetModal({
 
         <div className="space-y-4 overflow-y-auto px-5 py-5">
           {/* One-click auto generate (ChatGPT image-to-image via ai-flow) */}
-          {character.refImage && (
+          {GEN_ENABLED && character.refImage && (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50/60 p-4">
               <div className="mb-2 flex items-center gap-2">
                 <span className="text-xs font-medium text-slate-600">เครื่องมือ:</span>
