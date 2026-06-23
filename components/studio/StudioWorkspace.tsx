@@ -17,6 +17,7 @@ import {
 import {
   BookOpen,
   Clapperboard,
+  FileJson,
   FolderOpen,
   Info,
   Save,
@@ -57,6 +58,7 @@ import {
   type Scene,
   type StudioForm,
 } from '@/components/studio/types';
+import { buildGrokStoryboard, downloadStoryboardJson } from '@/components/studio/grokExport';
 
 export type StudioMode = 'drama' | 'sales';
 
@@ -422,6 +424,19 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     }
   };
 
+  // Bundle the whole story into a Grok-agent storyboard JSON and download it,
+  // ready to hand to Grok to generate clips (image-to-video per scene, joined).
+  const onDownloadJson = () => {
+    if (!drama) return;
+    const storyboard = buildGrokStoryboard(drama, form, isSales);
+    const safe =
+      (drama.title || 'storyboard')
+        .replace(/[^\w฀-๿]+/g, '_')
+        .replace(/^_+|_+$/g, '')
+        .slice(0, 40) || 'storyboard';
+    downloadStoryboardJson(storyboard, `${safe}.grok.json`);
+  };
+
   if (!hydrated) {
     return (
       <div className="flex justify-center py-20">
@@ -448,9 +463,19 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
         subtitle={subtitle}
         action={
           drama ? (
-            <Button icon={<Save className="h-4 w-4" />} loading={saving} onClick={onSave}>
-              บันทึกโปรเจกต์
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                icon={<FileJson className="h-4 w-4" />}
+                onClick={onDownloadJson}
+                title="รวมทุกฉากเป็นไฟล์ JSON เดียว ส่งให้ Grok agent ไปเจนคลิป (image-to-video ต่อฉาก แล้วต่อเป็นคลิปเดียว)"
+              >
+                ดาวน์โหลด JSON (Grok agent)
+              </Button>
+              <Button icon={<Save className="h-4 w-4" />} loading={saving} onClick={onSave}>
+                บันทึกโปรเจกต์
+              </Button>
+            </div>
           ) : undefined
         }
       />

@@ -170,3 +170,16 @@ export function emptyMedia(provider: ImageProvider = 'grok'): SceneMedia {
     videoStatus: 'idle',
   };
 }
+
+/**
+ * Compose the video prompt together with the Thai spoken line so that copying or
+ * exporting the video prompt always carries the บทพูด. If the dialogue text is
+ * already embedded in the prompt, it isn't appended twice.
+ */
+export function videoPromptWithDialogue(scene: Scene): string {
+  const vp = (scene.videoPrompt ?? '').trim();
+  const dlg = (scene.dialogue ?? '').trim();
+  if (!dlg) return vp;
+  if (vp.includes(dlg)) return vp;
+  return `${vp}\nบทพูด (Thai spoken line): "${dlg}"`;
+}

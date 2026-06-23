@@ -17,6 +17,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { Badge, Button, Spinner } from '@/components/ui';
+import { videoPromptWithDialogue } from './types';
 import type { ImageProvider, Scene, SceneMedia } from './types';
 
 type Props = {
@@ -193,7 +194,7 @@ export function SceneCard({
                       <RefreshCw className={'h-3 w-3' + (regenVid ? ' animate-spin' : '')} />
                       {regenVid ? 'กำลังเขียน…' : 'Regen'}
                     </button>
-                    <CopyBtn text={scene.videoPrompt} label="prompt วิดีโอ" />
+                    <CopyBtn text={videoPromptWithDialogue(scene)} label="prompt วิดีโอ" />
                   </div>
                 </div>
                 <textarea
@@ -291,7 +292,7 @@ export function SceneCard({
                 คัดลอก prompt
               </span>
               <CopyBtn text={scene.visualPrompt} label="ภาพ" />
-              <CopyBtn text={scene.videoPrompt} label="วิดีโอ" />
+              <CopyBtn text={videoPromptWithDialogue(scene)} label="วิดีโอ" />
             </div>
 
             {!media.imageDataUrl && (
