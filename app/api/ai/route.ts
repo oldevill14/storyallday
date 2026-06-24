@@ -269,9 +269,9 @@ export async function POST(req: Request) {
       };
       payload = {
         model,
-        // ละครหลายตอน/ฉาก = JSON ยาว — 2048 เดิมทำให้ถูกตัด (ได้ไม่ครบตอน/ฉาก).
-        // 8192 รองรับได้ถึง ~3 ตอน×5 ฉาก; โมเดล anthropic-compatible รองรับทั่วกัน.
-        max_tokens: 8192,
+        // ละครหลายตอน/ฉาก = JSON ยาวมาก (continuity engine ยิ่งเพิ่ม) — 8192 ตัด
+        // ที่ ~3×5; 16384 รองรับถึง ~5×5. ถ้ายังตัด ผู้ใช้ลดจำนวนตอน/ฉาก (มี error บอก).
+        max_tokens: 16384,
         ...(system ? { system } : {}),
         messages: img ? anthropicMsgsWithImage(messages, img) : messages,
       };
