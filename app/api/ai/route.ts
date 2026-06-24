@@ -49,9 +49,19 @@ function runCli(cmd: string, args: string[], timeoutMs: number): Promise<string>
         )
       )
     );
-    child.on('close', (code) => {
-      if (code === 0) resolve(out);
-      else reject(new Error(err.trim() || out.trim() || `${cmd} ออกด้วยรหัส ${code}`));
+    child.on('close', (code, signal) => {
+      if (code === 0) return resolve(out);
+      // spawn({ timeout }) kills the child with SIGTERM when it runs too long →
+      // code 143 (128+15) or null. Give an actionable message instead of a code.
+      if (signal === 'SIGTERM' || code === 143 || code === null) {
+        return reject(
+          new Error(
+            `"${cmd}" ใช้เวลานานเกิน ${Math.round(timeoutMs / 1000)} วินาที (timeout) — ` +
+              'ลองลดจำนวนตอน/ฉาก หรือสลับไปใช้ API key (เช่น z.ai) ในหน้าตั้งค่าแทนโหมด CLI'
+          )
+        );
+      }
+      reject(new Error(err.trim() || out.trim() || `${cmd} ออกด้วยรหัส ${code}`));
     });
     child.stdin?.end();
   });
@@ -88,7 +98,10 @@ async function handleCli(
     let text: string;
     if (engine === 'claude') {
       // Claude Code, logged in with a Claude subscription. Clean text output.
-      text = (await runCli('claude', ['-p', prompt], 180_000)).trim();
+      // --strict-mcp-config (with no --mcp-config) loads ZERO MCP servers, so we
+      // skip the user's heavy global MCP setup (obsidian/oracle/chrome/…) on every
+      // call — much faster startup. 280s stays under the route's maxDuration (300).
+      text = (await runCli('claude', ['-p', '--strict-mcp-config', prompt], 280_000)).trim();
     } else if (engine === 'codex') {
       // Codex CLI, logged in with ChatGPT. Output is chatty → clean it.
       const raw = await runCli(
