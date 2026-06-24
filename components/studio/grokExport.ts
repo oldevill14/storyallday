@@ -34,6 +34,10 @@ export function buildGrokStoryboard(
         setting: sc.setting,
         action: sc.action,
         dialogue_th: sc.dialogue,
+        // ตัวละครในฉาก + โน้ตความต่อเนื่องจากฉากก่อน (ช่วย agent เชื่อมช็อต)
+        ...(sc.characters?.length ? { characters: sc.characters } : {}),
+        ...(sc.continuity ? { continuity: sc.continuity } : {}),
+        // image_prompt/video_prompt ฝัง "บล็อกความต่อเนื่อง" (look + อัตลักษณ์ตัวละคร) ไว้แล้ว
         image_prompt: sc.visualPrompt,
         // วิดีโอ prompt ที่ "รวมบทพูด" ไว้แล้ว (ฝังในเครื่องหมายคำพูด)
         video_prompt: videoPromptWithDialogue(sc),
@@ -63,8 +67,15 @@ export function buildGrokStoryboard(
         'inconsistent character, face/outfit change between scenes, style change, watermark, text artifacts, distorted faces, extra limbs, flicker, low quality, blurry',
     },
     continuity: {
-      characters: drama.characters.map((c) => ({ name: c.name, description: c.description })),
-      style_lock: `Keep the "${form.style}" visual style and every character's identity, face and outfit identical across all scenes. The Thai spoken line is embedded in each video_prompt in quotes.`,
+      characters: drama.characters.map((c) => ({
+        name: c.name,
+        description: c.description,
+        ...(c.appearance ? { appearance: c.appearance } : {}),
+      })),
+      ...(drama.styleBible ? { style_bible: drama.styleBible } : {}),
+      style_lock: `Keep the "${form.style}" visual style${
+        drama.styleBible ? ' and the locked style_bible look' : ''
+      } and every character's identity, face and outfit identical across all scenes. The story is ONE continuous timeline — each scene continues from the previous one (see each scene's "continuity" note). The Thai spoken line is embedded in each video_prompt in quotes.`,
       ...(refContext && refContext.trim() ? { reference: refContext.trim() } : {}),
     },
     scenes,

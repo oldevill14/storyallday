@@ -13,6 +13,12 @@ export type VisualStyle =
 export type Character = {
   name: string;
   description: string;
+  /**
+   * Locked English visual identity (face, hair, build, signature wardrobe/colour).
+   * Embedded verbatim into every scene prompt the character appears in so their
+   * look never drifts between shots. Filled by the model during generation.
+   */
+  appearance?: string;
 };
 
 /** A single scene inside an episode. */
@@ -29,6 +35,14 @@ export type Scene = {
   videoPrompt: string;
   /** Target clip length, e.g. "8s". */
   duration: string;
+  /** Names of the characters present in this scene (drives identity locking). */
+  characters?: string[];
+  /**
+   * Thai note: what carries over from the previous scene (time, place, wardrobe,
+   * props, emotional beat) + how this shot bridges from the last one. Keeps the
+   * storyline reading as ONE continuous piece rather than disconnected vignettes.
+   */
+  continuity?: string;
 };
 
 /** One episode = an ordered list of scenes. */
@@ -43,6 +57,12 @@ export type Drama = {
   logline: string;
   characters: Character[];
   episodes: Episode[];
+  /**
+   * Global locked "look" (English): palette, lighting mood, lens, film grade,
+   * world/era. Appended to EVERY scene prompt so the whole drama keeps one
+   * consistent visual identity across all images/clips.
+   */
+  styleBible?: string;
 };
 
 /** Selling angle/tone for the dialogue + pitch. */

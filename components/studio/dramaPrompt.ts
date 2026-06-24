@@ -26,7 +26,7 @@ export function buildSystemPrompt(
   const orient = aspectRatio === '16:9' ? 'horizontal/landscape' : 'vertical';
   return `คุณคือผู้กำกับและนักเขียนบท "ละครสั้น" (short drama) มืออาชีพสำหรับสตูดิโอผลิตคอนเทนต์เชิงพาณิชย์ (WorkD-Cine)
 
-หน้าที่ของคุณ: แตกหัวข้อ/แนวคิดที่ได้รับ ออกเป็นเรื่อง → ตอน → ฉาก พร้อม prompt สำหรับสร้างภาพและวิดีโอแบบ image-to-video
+หน้าที่ของคุณ: แตกหัวข้อ/แนวคิดที่ได้รับ ออกเป็น "เรื่องเดียวที่ต่อเนื่องกัน" → ตอน → ฉาก พร้อม prompt สำหรับสร้างภาพและวิดีโอแบบ image-to-video
 
 ข้อบังคับด้านความปลอดภัย (WorkD safety — ห้ามฝ่าฝืน):
 - ตัวละครทุกตัวต้องเป็น "ผู้ใหญ่" เท่านั้น (adult) — ห้ามมีเด็กหรือผู้เยาว์โดยเด็ดขาด หากบทต้องการตัวละครอายุน้อย ให้ระบุเป็นผู้ใหญ่ (adult) เสมอ
@@ -34,27 +34,37 @@ export function buildSystemPrompt(
 - เนื้อหาต้องปลอดภัยเชิงพาณิชย์ ไม่มีความรุนแรง ไม่มีเนื้อหาผู้ใหญ่ ไม่ละเมิดลิขสิทธิ์
 - ทุกค่า visualPrompt และ videoPrompt ต้องลงท้ายด้วยประโยคนี้เป๊ะ ๆ (ภาษาอังกฤษ): "${SAFETY_SUFFIX}"
 
-ข้อกำหนดของ prompt:
-- visualPrompt: ภาษาอังกฤษ เริ่มต้นด้วยสไตล์ภาพ "${style}" แล้วตามด้วยรายละเอียดฉาก ตัวละคร แสง มุมกล้อง องค์ประกอบ สำหรับอัตราส่วน ${aspectRatio} (${orient}) จบด้วยประโยคความปลอดภัย
-- videoPrompt: ภาษาอังกฤษ เป็นคำสั่ง image-to-video — บอกการเคลื่อนไหวกล้อง (camera direction) การเคลื่อนไหวของตัวละคร และใส่บทพูดในเครื่องหมายคำพูด ("...") จบด้วยประโยคความปลอดภัย
-- dialogue: ภาษาไทย เป็นบทพูดของตัวละครในฉากนั้น
-- duration: ระยะเวลาคลิป ใช้ "8s"
+★★ ความต่อเนื่อง (Continuity engine — สำคัญที่สุด) ★★
+ภาพ/คลิปแต่ละฉากถูกเจนแยกกัน (stateless) ดังนั้น "ความต่อเนื่อง" ต้องถูกล็อกเป็นข้อมูลกลาง แล้วเรื่องต้องร้อยเป็นเส้นเดียว:
+1. "styleBible" — ล็อก "ลุค" รวมของทั้งเรื่องเป็นภาษาอังกฤษหนึ่งย่อหน้า: โทนสี (palette) อารมณ์แสง (lighting mood) เลนส์/มุมมอง โทนฟิล์ม/เกรดสี และโลก/ยุคสมัย — ใช้เหมือนกันทุกฉาก
+2. ทุกตัวละครต้องมี "appearance" — อัตลักษณ์ภาพภาษาอังกฤษหนึ่งบรรทัด (ช่วงวัยผู้ใหญ่, ใบหน้า, ทรงผม, รูปร่าง, ชุด/สีประจำตัว) — หน้าตา/ชุดต้อง "เหมือนเดิมเป๊ะทุกฉาก"
+3. เรื่องต้องเป็น "เส้นเดียวต่อเนื่อง": ฉากถัดไปต้องสืบเนื่องจากฉากก่อนหน้า (เหตุ→ผล, ไทม์ไลน์เดิน, สถานที่/เวลาเปลี่ยนอย่างมีเหตุผล) ห้ามเป็นฉากกระจัดกระจายไม่เกี่ยวกัน
+4. แต่ละ scene ต้องระบุ "characters" (ชื่อตัวละครที่อยู่ในฉากนั้น) และ "continuity" (โน้ตไทย: อะไรต่อเนื่องจากฉากก่อน — เวลา/สถานที่/เสื้อผ้า/พร็อพ/อารมณ์ และกล้องเชื่อมจากช็อตก่อนอย่างไร)
+
+ข้อกำหนดของ prompt (เขียนให้ "โฟกัสเฉพาะฉากนี้" — ระบบจะผนวกบล็อกความต่อเนื่องที่ล็อกไว้ให้อัตโนมัติ จึง "ไม่ต้อง" ลอก styleBible หรือ appearance เต็ม ๆ ซ้ำในทุก prompt แค่อ้างตัวละครด้วย "ชื่อ"):
+- visualPrompt: ภาษาอังกฤษ เริ่มด้วยสไตล์ "${style}" แล้วบรรยายเฉพาะ subject/action/กรอบภาพ/แสงของฉากนี้ สำหรับอัตราส่วน ${aspectRatio} (${orient}) อ้างตัวละครด้วยชื่อ จบด้วยประโยคความปลอดภัย
+- videoPrompt: ภาษาอังกฤษ เป็นคำสั่ง image-to-video — ขึ้นต้นด้วยการเชื่อมจากช็อตก่อน (เช่น "Continuing from the previous shot, ...") บอกการเคลื่อนกล้อง + การเคลื่อนไหวตัวละคร คงชุด/ลุคเดิม ใส่บทพูดในเครื่องหมายคำพูด ("...") จบด้วยประโยคความปลอดภัย
+- dialogue: ภาษาไทย บทพูดของตัวละครในฉากนั้น
+- duration: ใช้ "8s"
 
 ตอบกลับเป็น JSON เท่านั้น (ไม่มีคำอธิบาย ไม่มี markdown code fence) ตามโครงสร้างนี้เป๊ะ ๆ:
 {
   "title": "ชื่อเรื่อง (ไทย)",
   "logline": "เรื่องย่อ 1-2 ประโยค (ไทย)",
-  "characters": [{ "name": "ชื่อสมมติ", "description": "คำอธิบายตัวละคร (ผู้ใหญ่)" }],
+  "styleBible": "Locked global look in English: palette, lighting mood, lens, film grade, world/era — identical for every scene",
+  "characters": [{ "name": "ชื่อสมมติ", "description": "คำอธิบายตัวละคร (ผู้ใหญ่, ไทย)", "appearance": "Locked English identity: adult age, face, hair, build, signature outfit/colour" }],
   "episodes": [
     {
       "ep": 1,
       "scenes": [
         {
           "setting": "สถานที่/บรรยากาศฉาก (ไทย)",
-          "action": "สิ่งที่เกิดขึ้นในฉาก (ไทย)",
+          "action": "สิ่งที่เกิดขึ้นในฉาก (ไทย) — สืบเนื่องจากฉากก่อน",
           "dialogue": "บทพูด (ไทย)",
-          "visualPrompt": "${style}, ... , ${SAFETY_SUFFIX}",
-          "videoPrompt": "Camera ... \\"dialogue here\\" ... , ${SAFETY_SUFFIX}",
+          "characters": ["ชื่อตัวละครที่อยู่ในฉากนี้"],
+          "continuity": "โน้ตไทย: อะไรต่อเนื่องจากฉากก่อน + กล้องเชื่อมอย่างไร",
+          "visualPrompt": "${style}, <this scene only>, ${SAFETY_SUFFIX}",
+          "videoPrompt": "Continuing from the previous shot, Camera ... \\"dialogue here\\" ... , ${SAFETY_SUFFIX}",
           "duration": "8s"
         }
       ]
@@ -71,6 +81,8 @@ export type CreativeContext = {
   cast?: string[];
   /** Selling style: { label, instruction } from SALES_STYLE_META. */
   salesStyle?: { label: string; instruction: string };
+  /** Locked global look (from the generated drama) — keeps regen shots on-style. */
+  styleBible?: string;
 };
 
 /** Thai context block describing the product + chosen cast, or '' if none. */
@@ -131,9 +143,11 @@ ${contextBlock(ctx)}
 
 ข้อกำหนด:
 - ต้องมี episodes ครบ ${form.episodeCount} ตอน และทุกตอนต้องมี scenes ครบ ${form.scenesPerEpisode} ฉาก
-- รักษาความต่อเนื่องของเรื่องและตัวละครข้ามตอน/ฉาก
-- ทุก visualPrompt เริ่มด้วย "${form.style}" และลงท้ายด้วยประโยคความปลอดภัย
-- ทุก videoPrompt มีคำสั่งกล้อง + บทพูดในเครื่องหมายคำพูด + ลงท้ายด้วยประโยคความปลอดภัย
+- เล่าเป็น "เรื่องเดียวที่ต่อเนื่องกันทั้งหมด" — ทุกฉากสืบเนื่องจากฉากก่อนหน้า (เหตุ→ผล, ไทม์ไลน์เดิน) ไม่ใช่ฉากแยกกัน
+- ใส่ "styleBible" (ลุครวมล็อกไว้) และให้ทุกตัวละครมี "appearance" (อัตลักษณ์ภาพล็อกไว้) — ใช้เหมือนเดิมทุกฉากเพื่อหน้าตา/ชุดไม่เพี้ยน
+- ทุก scene ใส่ "characters" (ชื่อตัวละครในฉาก) และ "continuity" (โน้ตความต่อเนื่องจากฉากก่อน)
+- ทุก visualPrompt เริ่มด้วย "${form.style}" บรรยายเฉพาะฉากนั้น และลงท้ายด้วยประโยคความปลอดภัย
+- ทุก videoPrompt เริ่มด้วยการเชื่อมจากช็อตก่อน + คำสั่งกล้อง + บทพูดในเครื่องหมายคำพูด + ลงท้ายด้วยประโยคความปลอดภัย
 - ตอบเป็น JSON ตามโครงสร้างที่กำหนดเท่านั้น`;
 }
 
@@ -148,6 +162,9 @@ export function finalizeVideoPrompt(text: string): string {
 
 function ctxForRegen(ctx?: CreativeContext): string {
   const parts: string[] = [];
+  if (ctx?.styleBible?.trim()) {
+    parts.push(`Locked global look (keep identical): ${ctx.styleBible.trim()}`);
+  }
   if (ctx?.salesStyle) {
     parts.push(`Selling tone: ${ctx.salesStyle.label} — ${ctx.salesStyle.instruction}`);
   }
@@ -179,6 +196,9 @@ export function buildImageRegenPrompt(
 Start with the visual style "${style}". Describe the subject, setting, lighting, camera angle, composition. ${ctxForRegen(
     ctx
   )}
+CONTINUITY: keep the overall look and every character's face/outfit IDENTICAL to the rest of the series — do not redesign them.${
+    scene.characters?.length ? ` Characters present: ${scene.characters.join(', ')}.` : ''
+  }
 
 Scene:
 - setting: ${scene.setting}
@@ -198,9 +218,12 @@ export function buildVideoRegenPrompt(
   const orient = aspectRatio === '16:9' ? 'horizontal/landscape' : 'vertical';
   return `Rewrite the IMAGE-TO-VIDEO prompt for this single ${aspectRatio} (${orient}) scene. Output ONLY the English prompt — no explanation, no markdown.
 
-Describe what MOVES/changes (camera direction + character motion), keep it ~8 seconds, and include the spoken line in quotes. ${ctxForRegen(
+Begin by continuing from the previous shot (seamless flow). Describe what MOVES/changes (camera direction + character motion), keep it ~8 seconds, and include the spoken line in quotes. ${ctxForRegen(
     ctx
   )}
+CONTINUITY: keep the overall look and every character's face/outfit IDENTICAL to the rest of the series — do not redesign them.${
+    scene.characters?.length ? ` Characters present: ${scene.characters.join(', ')}.` : ''
+  }
 
 Scene:
 - setting: ${scene.setting}
@@ -224,14 +247,62 @@ function ensureStyle(prompt: string, style: VisualStyle): string {
   return p.toLowerCase().startsWith(style.toLowerCase()) ? p : `${style}, ${p}`;
 }
 
-function normScene(raw: unknown, style: VisualStyle): Scene {
+function normName(s: unknown): string {
+  return String(s ?? '').trim().toLowerCase();
+}
+
+/** Continuity context shared by every scene of one drama. */
+type ContinuityCtx = {
+  styleBible?: string;
+  /** normalized name → locked English appearance. */
+  appearanceByName: Map<string, string>;
+};
+
+/**
+ * The locked-look + present-cast identity clause appended to each scene prompt.
+ * This is what makes every independently-generated image/clip share the same
+ * world and the same faces/outfits — the heart of the continuity engine.
+ */
+function sceneAnchor(present: string[], cont?: ContinuityCtx): string {
+  if (!cont) return '';
+  const parts: string[] = [];
+  if (cont.styleBible?.trim()) parts.push(cont.styleBible.trim());
+  // Use the characters tagged in this scene; if none tagged, lock all of them.
+  const names = present.length ? present : [...cont.appearanceByName.keys()];
+  const looks = names
+    .map((n) => cont.appearanceByName.get(normName(n)))
+    .filter((s): s is string => !!s && s.trim().length > 0);
+  // de-dup while keeping order
+  const uniqLooks = [...new Set(looks)];
+  if (uniqLooks.length) parts.push(`consistent character identity — ${uniqLooks.join('; ')}`);
+  return parts.join('. ');
+}
+
+/** Append the locked continuity clause (idempotent) — run BEFORE ensureSafety. */
+function ensureContinuity(prompt: string, anchor: string): string {
+  const p = String(prompt ?? '').trim();
+  const a = anchor.trim();
+  if (!a) return p;
+  if (p.includes(a)) return p;
+  return `${p.replace(/[.\s]+$/, '')}. Continuity: ${a}`;
+}
+
+function normScene(raw: unknown, style: VisualStyle, cont?: ContinuityCtx): Scene {
   const o = (raw ?? {}) as Record<string, unknown>;
-  const visualPrompt = ensureSafety(ensureStyle(String(o.visualPrompt ?? ''), style));
-  const videoPrompt = ensureSafety(String(o.videoPrompt ?? ''));
+  const characters = Array.isArray(o.characters)
+    ? o.characters.map((c) => String(c ?? '').trim()).filter(Boolean)
+    : [];
+  const anchor = sceneAnchor(characters, cont);
+  const visualPrompt = ensureSafety(
+    ensureContinuity(ensureStyle(String(o.visualPrompt ?? ''), style), anchor)
+  );
+  const videoPrompt = ensureSafety(ensureContinuity(String(o.videoPrompt ?? ''), anchor));
   return {
     setting: String(o.setting ?? '').trim() || '—',
     action: String(o.action ?? '').trim(),
     dialogue: String(o.dialogue ?? '').trim(),
+    ...(characters.length ? { characters } : {}),
+    ...(String(o.continuity ?? '').trim() ? { continuity: String(o.continuity).trim() } : {}),
     visualPrompt,
     videoPrompt,
     duration: String(o.duration ?? '8s').trim() || '8s',
@@ -240,9 +311,11 @@ function normScene(raw: unknown, style: VisualStyle): Scene {
 
 function normCharacter(raw: unknown): Character {
   const o = (raw ?? {}) as Record<string, unknown>;
+  const appearance = String(o.appearance ?? '').trim();
   return {
     name: String(o.name ?? 'ตัวละคร').trim() || 'ตัวละคร',
     description: String(o.description ?? '').trim(),
+    ...(appearance ? { appearance } : {}),
   };
 }
 
@@ -258,6 +331,19 @@ export function parseDrama(raw: string, style: VisualStyle): Drama {
     throw new Error('AI ตอบกลับมาในรูปแบบที่ไม่ถูกต้อง ลองอีกครั้ง');
   }
 
+  // Parse the drama-wide continuity locks FIRST so every scene can embed them.
+  const styleBible = String(parsed.styleBible ?? '').trim();
+  const charsRaw = Array.isArray(parsed.characters) ? parsed.characters : [];
+  const characters = charsRaw.map(normCharacter);
+  const appearanceByName = new Map<string, string>();
+  for (const c of characters) {
+    if (c.appearance?.trim()) appearanceByName.set(normName(c.name), c.appearance.trim());
+  }
+  const cont: ContinuityCtx = {
+    styleBible: styleBible || undefined,
+    appearanceByName,
+  };
+
   const epsRaw = Array.isArray(parsed.episodes) ? parsed.episodes : [];
   const episodes: Episode[] = epsRaw
     .map((e, i): Episode => {
@@ -265,7 +351,7 @@ export function parseDrama(raw: string, style: VisualStyle): Drama {
       const scenesRaw = Array.isArray(eo.scenes) ? eo.scenes : [];
       return {
         ep: Number.isFinite(Number(eo.ep)) ? Number(eo.ep) : i + 1,
-        scenes: scenesRaw.map((s) => normScene(s, style)),
+        scenes: scenesRaw.map((s) => normScene(s, style, cont)),
       };
     })
     .filter((e) => e.scenes.length > 0)
@@ -276,12 +362,11 @@ export function parseDrama(raw: string, style: VisualStyle): Drama {
     throw new Error('AI ไม่ได้สร้างฉากใด ๆ กลับมา ลองปรับหัวข้อแล้วลองอีกครั้ง');
   }
 
-  const charsRaw = Array.isArray(parsed.characters) ? parsed.characters : [];
-
   return {
     title: String(parsed.title ?? 'ละครสั้นไม่มีชื่อ').trim() || 'ละครสั้นไม่มีชื่อ',
     logline: String(parsed.logline ?? '').trim(),
-    characters: charsRaw.map(normCharacter),
+    ...(styleBible ? { styleBible } : {}),
+    characters,
     episodes,
   };
 }
