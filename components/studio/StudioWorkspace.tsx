@@ -52,7 +52,6 @@ import {
 import {
   emptyMedia,
   sceneKey,
-  videoPromptWithDialogue,
   SALES_STYLE_META,
   type Drama,
   type SceneMedia,
@@ -76,28 +75,6 @@ const DEFAULT_FORM: StudioForm = {
 };
 
 type SavedDrama = { id: string; title: string; createdAt?: string };
-
-async function postGenerate<T extends Record<string, unknown>>(
-  url: string,
-  body: T
-): Promise<string> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => null)) as
-    | { ok: true; dataUrl: string }
-    | { ok: false; error: string }
-    | null;
-  if (!res.ok || !data || data.ok !== true || typeof data.dataUrl !== 'string') {
-    const msg =
-      (data && 'error' in data && data.error) ||
-      `สร้างไม่สำเร็จ (HTTP ${res.status})`;
-    throw new Error(msg);
-  }
-  return data.dataUrl;
-}
 
 export function StudioWorkspace({ mode }: { mode: StudioMode }) {
   const isSales = mode === 'sales';
@@ -317,7 +294,6 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     })();
 
   // Ordered list of ref-image data-urls (characters in order, then product).
-  const refImageList = refEntities.filter((e) => e.img).map((e) => e.img as string);
 
   // Text descriptions (always included so the look is known even without ref images).
   const castText = refEntities.length
@@ -345,56 +321,6 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
 
   // For copy buttons + exported JSON (the user attaches the ref images themselves).
   const copyRefContext = [castText, refOrderNote].filter(Boolean).join('\n\n');
-
-  const genImage = async (key: string, scene: Scene) => {
-    const provider = media[key]?.imageProvider ?? 'grok';
-    // Lock face/product via image-to-image only when the per-scene toggle is on
-    // (default) AND references exist; otherwise fast text-to-image.
-    const lockRef = media[key]?.lockRef ?? true;
-    // Lock the look via image-to-image (in order) only when the toggle is on AND refs
-    // exist; otherwise fast text-to-image (still carries the cast text descriptions).
-    const useRefs = lockRef && refImageList.length > 0;
-    const refs = useRefs ? refImageList : [];
-    const refBlock = useRefs ? copyRefContext : castText;
-    const prompt = [refBlock, scene.visualPrompt].filter(Boolean).join('\n\n');
-    patchMedia(key, { imageStatus: 'loading', imageError: undefined });
-    try {
-      const dataUrl = await postGenerate('/api/generate-image', {
-        prompt,
-        provider,
-        refImages: refs,
-      });
-      patchMedia(key, { imageStatus: 'done', imageDataUrl: dataUrl });
-    } catch (e) {
-      patchMedia(key, {
-        imageStatus: 'error',
-        imageError: e instanceof Error ? e.message : 'สร้างรูปภาพไม่สำเร็จ',
-      });
-    }
-  };
-
-  const genVideo = async (key: string, scene: Scene) => {
-    // Video is generated FROM the scene image (image-to-video). The UI gates the
-    // button until the image exists, so imageDataUrl should be present here.
-    const startFrame = media[key]?.imageDataUrl;
-    patchMedia(key, { videoStatus: 'loading', videoError: undefined });
-    try {
-      const videoPrompt = [copyRefContext, videoPromptWithDialogue(scene)]
-        .filter(Boolean)
-        .join('\n\n');
-      const dataUrl = await postGenerate('/api/generate-video', {
-        prompt: videoPrompt,
-        tool: 'grok',
-        refImage: startFrame,
-      });
-      patchMedia(key, { videoStatus: 'done', videoDataUrl: dataUrl });
-    } catch (e) {
-      patchMedia(key, {
-        videoStatus: 'error',
-        videoError: e instanceof Error ? e.message : 'สร้างวิดีโอไม่สำเร็จ',
-      });
-    }
-  };
 
   const regenImagePrompt = async (key: string, epIndex: number, sceneIdx: number, scene: Scene) => {
     patchMedia(key, { regenImageLoading: true });
@@ -623,12 +549,8 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
                       scene={scene}
                       aspectRatio={form.aspectRatio}
                       copyRefContext={copyRefContext}
-                      hasRefs={refImageList.length > 0}
                       media={media[key] ?? emptyMedia()}
                       onSceneChange={(patch) => patchScene(epIndex, sceneIdx, patch)}
-                      onMediaChange={(patch) => patchMedia(key, patch)}
-                      onGenerateImage={() => genImage(key, scene)}
-                      onGenerateVideo={() => genVideo(key, scene)}
                       onRegenImage={() => regenImagePrompt(key, epIndex, sceneIdx, scene)}
                       onRegenVideo={() => regenVideoPrompt(key, epIndex, sceneIdx, scene)}
                     />
