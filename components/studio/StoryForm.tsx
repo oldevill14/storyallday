@@ -100,6 +100,60 @@ export function StoryForm({
   onToggleCharacter,
 }: Props) {
   const canGenerate = hasKey && form.topic.trim().length > 0 && !generating;
+  const selectedNames = characters
+    .filter((c) => selectedIds.includes(c.id))
+    .map((c) => c.name);
+
+  // ★ เลือกตัวละคร "ก่อน" หัวข้อ — รายละเอียดตัวละครที่เลือกถูกส่งเข้า generation
+  // (ผ่าน creativeCtx → cast) ให้เรื่องถูกสร้างรอบตัวละครเหล่านี้.
+  const castSection = (
+    <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-4">
+      <div className="mb-2 flex items-center justify-between">
+        <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+          <Users className="h-4 w-4 text-violet-600" />
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-violet-600 text-[11px] font-bold text-white">
+            1
+          </span>
+          เลือกตัวละครก่อน{' '}
+          <span className="font-normal text-slate-400">(เรื่องจะอ้างอิงตัวละครที่เลือก)</span>
+        </label>
+        <Link href="/characters" className="text-xs font-medium text-violet-600 hover:underline">
+          + จัดการตัวละคร
+        </Link>
+      </div>
+      {characters.length === 0 ? (
+        <p className="text-sm text-slate-400">
+          ยังไม่มีตัวละคร —{' '}
+          <Link href="/characters" className="font-medium text-violet-600 hover:underline">
+            ไปสร้างตัวละคร
+          </Link>{' '}
+          แล้วกลับมาเลือกใช้ได้เลย
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {characters.map((c) => {
+            const active = selectedIds.includes(c.id);
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => onToggleCharacter(c.id)}
+                className={
+                  'rounded-full px-3 py-1.5 text-sm font-medium transition-colors ' +
+                  (active
+                    ? 'bg-violet-600 text-white shadow-sm'
+                    : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-violet-50 hover:text-violet-700')
+                }
+              >
+                {active ? '✓ ' : ''}
+                {c.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <Card className="space-y-6">
@@ -114,6 +168,9 @@ export function StoryForm({
           </p>
         </div>
       </div>
+
+      {/* ★ STEP 1: เลือกตัวละครก่อน (ย้ายขึ้นบนสุด เพื่อให้เขียนหัวข้อโดยอิงตัวละคร) */}
+      {castSection}
 
       {/* Title + topic */}
       <div className="grid grid-cols-1 gap-4">
@@ -164,7 +221,9 @@ export function StoryForm({
             className={inputBase + ' resize-y leading-relaxed'}
           />
           <p className="mt-1.5 text-xs text-slate-400">
-            ยิ่งระบุละเอียด (ตัวละคร อารมณ์ ฉากจบ) บทที่ได้ยิ่งตรงใจ
+            {selectedNames.length > 0
+              ? `ตัวละครที่เลือก: ${selectedNames.join(', ')} — เขียนหัวข้อให้ตัวละครเหล่านี้เป็นตัวเดินเรื่อง`
+              : 'ยิ่งระบุละเอียด (ตัวละคร อารมณ์ ฉากจบ) บทที่ได้ยิ่งตรงใจ'}
           </p>
         </div>
       </div>
@@ -278,50 +337,6 @@ export function StoryForm({
         </div>
       </div>
       )}
-
-      {/* Cast (reusable characters) — available in both โหมด */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-        <div className="mb-2 flex items-center justify-between">
-          <label className="flex items-center gap-1.5 text-sm font-semibold text-slate-700">
-            <Users className="h-4 w-4 text-violet-600" /> ตัวละครในคลิป{' '}
-            <span className="font-normal text-slate-400">(เลือกได้หลายตัว)</span>
-          </label>
-          <Link href="/characters" className="text-xs font-medium text-violet-600 hover:underline">
-            + จัดการตัวละคร
-          </Link>
-        </div>
-        {characters.length === 0 ? (
-          <p className="text-sm text-slate-400">
-            ยังไม่มีตัวละคร —{' '}
-            <Link href="/characters" className="font-medium text-violet-600 hover:underline">
-              ไปสร้างตัวละคร
-            </Link>{' '}
-            แล้วกลับมาเลือกใช้ได้เลย
-          </p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {characters.map((c) => {
-              const active = selectedIds.includes(c.id);
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => onToggleCharacter(c.id)}
-                  className={
-                    'rounded-full px-3 py-1.5 text-sm font-medium transition-colors ' +
-                    (active
-                      ? 'bg-violet-600 text-white shadow-sm'
-                      : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-violet-50 hover:text-violet-700')
-                  }
-                >
-                  {active ? '✓ ' : ''}
-                  {c.name}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
       {/* Counts */}
       <div className="flex flex-wrap gap-6">
