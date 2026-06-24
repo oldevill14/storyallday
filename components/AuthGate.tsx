@@ -26,7 +26,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const hydrated = useHydrated();
   const me = useStore((s) => s.me);
 
-  const onLogin = pathname === '/login';
+  // trailingSlash:true (static export for Pages) makes usePathname() return
+  // '/login/' — strip the trailing slash so the gate recognises the login route
+  // (otherwise it treats /login as protected, sees no user, and renders blank).
+  const onLogin = (pathname ?? '').replace(/\/+$/, '') === '/login';
 
   useEffect(() => {
     if (loading) return;

@@ -13,7 +13,9 @@ import { TopBar } from '@/components/TopBar';
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
 
-  if (pathname === '/login') {
+  // trailingSlash:true makes usePathname() return '/login/' — normalise so the
+  // login page renders bare (no sidebar/topbar) instead of inside the app shell.
+  if ((pathname ?? '').replace(/\/+$/, '') === '/login') {
     return <>{children}</>;
   }
 
