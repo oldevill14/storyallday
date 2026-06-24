@@ -48,6 +48,16 @@ export function buildGrokStoryboard(
         // ตัวละครในฉาก + โน้ตความต่อเนื่องจากฉากก่อน (ช่วย agent เชื่อมช็อต)
         ...(sc.characters?.length ? { characters: sc.characters } : {}),
         ...(sc.continuity ? { continuity: sc.continuity } : {}),
+        // ฉากนี้ "ต้องใช้รูปอ้างอิงหมายเลขไหน" — ตัวละครที่อยู่ในฉาก + สินค้า (อ้างอิง 100%)
+        ...(() => {
+          if (!refImages?.length) return {};
+          const present = refImages.filter(
+            (ri) => ri.kind === 'product' || !sc.characters?.length || sc.characters.includes(ri.name),
+          );
+          return present.length
+            ? { use_reference_images: present.map((r) => ({ order: r.order, name: r.name })) }
+            : {};
+        })(),
         // image_prompt/video_prompt ฝัง "บล็อกความต่อเนื่อง" (look + อัตลักษณ์ตัวละคร) ไว้แล้ว
         image_prompt: sc.visualPrompt,
         // วิดีโอ prompt ที่ "รวมบทพูด" ไว้แล้ว (ฝังในเครื่องหมายคำพูด)
@@ -90,6 +100,13 @@ export function buildGrokStoryboard(
       ...(refContext && refContext.trim() ? { reference: refContext.trim() } : {}),
       // รูปอ้างอิงจริง (data URL) ของตัวละคร/สินค้าที่เลือก เรียงตามลำดับ image 1,2,…
       ...(refImages && refImages.length ? { reference_images: refImages } : {}),
+      // คำสั่งบังคับอ้างอิง 100% (image-to-image เข้ม — รูปชนะ text เสมอ)
+      ...(refImages && refImages.length
+        ? {
+            reference_lock:
+              'STRICT 100% image-to-image. Each item in reference_images is the ABSOLUTE source of truth for that subject. In EVERY scene, reproduce each referenced character/product PIXEL-FAITHFULLY — same face, skin tone, hairstyle, outfit, shape, label and colors. The reference image always overrides any text description. Each scene lists the exact images to use in its "use_reference_images". NEVER restyle, re-age, beautify, swap, crop out or redesign a referenced subject; only pose, expression, camera angle and background may change between scenes.',
+          }
+        : {}),
     },
     scenes,
     assembly: {

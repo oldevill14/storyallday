@@ -310,14 +310,16 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     const withImg = refEntities.filter((e) => e.img);
     if (!withImg.length) return '';
     return [
-      'Reference images — attach and use in THIS exact order (do not reorder or swap):',
+      'REFERENCE IMAGES — STRICT image-to-image. These attached images are the ABSOLUTE source of truth: if any text description conflicts with an image, the IMAGE WINS. Attach and use in THIS exact order (do not reorder or swap):',
       ...withImg.map(
         (e, i) =>
-          `- image ${i + 1} = ${e.kind} "${e.name}" — match it exactly (${
-            e.kind === 'product' ? 'same shape/label/colors' : 'same face/hair/outfit/identity'
+          `- image ${i + 1} = ${e.kind} "${e.name}" — reproduce it 100% IDENTICALLY (${
+            e.kind === 'product'
+              ? 'exact same shape, label, text, colors and proportions'
+              : 'exact same face, skin tone, hairstyle, outfit and body — do NOT restyle, re-age, beautify or redesign'
           })`,
       ),
-      'Conditions: characters come first in this order; the product (if any) is the LAST image. Place all referenced characters and the product together naturally in the same scene; keep each one identical to its own image in every scene.',
+      'Hard rules: characters come first in this order; the product (if any) is the LAST image. Keep every referenced subject pixel-faithful to its own image in EVERY scene — same identity, zero drift. Only pose, expression, camera angle and background may change per scene.',
     ].join('\n');
   })();
 
