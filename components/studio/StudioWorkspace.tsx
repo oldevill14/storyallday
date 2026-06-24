@@ -17,8 +17,10 @@ import {
 import {
   BookOpen,
   Clapperboard,
+  Download,
   FileJson,
   FolderOpen,
+  Image as ImageIcon,
   Info,
   Save,
   Sparkles,
@@ -52,7 +54,6 @@ import {
 import {
   emptyMedia,
   sceneKey,
-  videoPromptWithDialogue,
   SALES_STYLE_META,
   type Drama,
   type SceneMedia,
@@ -76,28 +77,6 @@ const DEFAULT_FORM: StudioForm = {
 };
 
 type SavedDrama = { id: string; title: string; createdAt?: string };
-
-async function postGenerate<T extends Record<string, unknown>>(
-  url: string,
-  body: T
-): Promise<string> {
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const data = (await res.json().catch(() => null)) as
-    | { ok: true; dataUrl: string }
-    | { ok: false; error: string }
-    | null;
-  if (!res.ok || !data || data.ok !== true || typeof data.dataUrl !== 'string') {
-    const msg =
-      (data && 'error' in data && data.error) ||
-      `สร้างไม่สำเร็จ (HTTP ${res.status})`;
-    throw new Error(msg);
-  }
-  return data.dataUrl;
-}
 
 export function StudioWorkspace({ mode }: { mode: StudioMode }) {
   const isSales = mode === 'sales';
@@ -196,7 +175,7 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     setGenError(null);
     try {
       const title = form.title.trim();
-      // All providers attempt vision (image attached to the request).
+      // All providers go through /api/ai which forwards the image for vision.
       const canVision = true;
       const kind = isSales
         ? 'คลิปขายของแนวตั้ง (ละครสั้นที่ปิดการขายอย่างเป็นธรรมชาติ)'
@@ -317,7 +296,6 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     })();
 
   // Ordered list of ref-image data-urls (characters in order, then product).
-  const refImageList = refEntities.filter((e) => e.img).map((e) => e.img as string);
 
   // Text descriptions (always included so the look is known even without ref images).
   const castText = refEntities.length
@@ -345,56 +323,6 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
 
   // For copy buttons + exported JSON (the user attaches the ref images themselves).
   const copyRefContext = [castText, refOrderNote].filter(Boolean).join('\n\n');
-
-  const genImage = async (key: string, scene: Scene) => {
-    const provider = media[key]?.imageProvider ?? 'grok';
-    // Lock face/product via image-to-image only when the per-scene toggle is on
-    // (default) AND references exist; otherwise fast text-to-image.
-    const lockRef = media[key]?.lockRef ?? true;
-    // Lock the look via image-to-image (in order) only when the toggle is on AND refs
-    // exist; otherwise fast text-to-image (still carries the cast text descriptions).
-    const useRefs = lockRef && refImageList.length > 0;
-    const refs = useRefs ? refImageList : [];
-    const refBlock = useRefs ? copyRefContext : castText;
-    const prompt = [refBlock, scene.visualPrompt].filter(Boolean).join('\n\n');
-    patchMedia(key, { imageStatus: 'loading', imageError: undefined });
-    try {
-      const dataUrl = await postGenerate('/api/generate-image', {
-        prompt,
-        provider,
-        refImages: refs,
-      });
-      patchMedia(key, { imageStatus: 'done', imageDataUrl: dataUrl });
-    } catch (e) {
-      patchMedia(key, {
-        imageStatus: 'error',
-        imageError: e instanceof Error ? e.message : 'สร้างรูปภาพไม่สำเร็จ',
-      });
-    }
-  };
-
-  const genVideo = async (key: string, scene: Scene) => {
-    // Video is generated FROM the scene image (image-to-video). The UI gates the
-    // button until the image exists, so imageDataUrl should be present here.
-    const startFrame = media[key]?.imageDataUrl;
-    patchMedia(key, { videoStatus: 'loading', videoError: undefined });
-    try {
-      const videoPrompt = [copyRefContext, videoPromptWithDialogue(scene)]
-        .filter(Boolean)
-        .join('\n\n');
-      const dataUrl = await postGenerate('/api/generate-video', {
-        prompt: videoPrompt,
-        tool: 'grok',
-        refImage: startFrame,
-      });
-      patchMedia(key, { videoStatus: 'done', videoDataUrl: dataUrl });
-    } catch (e) {
-      patchMedia(key, {
-        videoStatus: 'error',
-        videoError: e instanceof Error ? e.message : 'สร้างวิดีโอไม่สำเร็จ',
-      });
-    }
-  };
 
   const regenImagePrompt = async (key: string, epIndex: number, sceneIdx: number, scene: Scene) => {
     patchMedia(key, { regenImageLoading: true });
@@ -596,13 +524,51 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
             )}
           </Card>
 
-          <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-            <span>
-              การสร้างภาพ/วิดีโอใช้บัญชี <span className="font-medium text-slate-600">ai-flow</span>{' '}
-              (โปรไฟล์ Grok / ChatGPT บนเครื่องนี้) ซึ่งแยกจากบัญชีที่เข้าสู่ระบบแอป — กดสร้างทีละฉากเพื่อคุมการใช้งาน
-            </span>
-          </div>
+          {/* ภาพอ้างอิงตัวละคร/สินค้าที่เลือก — แนบตามลำดับนี้ตอนเอาพรอมต์ไปเจนเองที่ Grok/ChatGPT */}
+          {refEntities.some((e) => e.img) ? (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                <ImageIcon className="h-4 w-4 text-violet-600" />
+                ภาพอ้างอิง — แนบตามลำดับนี้ตอนเอาพรอมต์ไปเจน (Grok / ChatGPT) เพื่อให้หน้าตัวละคร/สินค้าตรงทุกฉาก
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {refEntities
+                  .filter((e) => e.img)
+                  .map((e, i) => (
+                    <div key={`${e.kind}-${i}`} className="flex w-24 flex-col items-center gap-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={e.img}
+                        alt={e.name}
+                        className="h-24 w-24 rounded-lg object-cover ring-1 ring-violet-200"
+                      />
+                      <span className="w-full truncate text-center text-[11px] font-medium text-slate-600">
+                        image {i + 1} · {e.name}
+                      </span>
+                      <a
+                        href={e.img}
+                        download={`ref-${i + 1}-${e.name}.png`}
+                        className="inline-flex items-center gap-0.5 text-[11px] text-violet-600 hover:underline"
+                      >
+                        <Download className="h-3 w-3" /> เซฟรูป
+                      </a>
+                    </div>
+                  ))}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                พรอมต์ที่กด “คัดลอก” มีคำอธิบาย + ลำดับภาพให้แล้ว — แค่แนบรูปเหล่านี้ตามลำดับ (image 1, 2, …) ตอนวางพรอมต์
+              </p>
+            </div>
+          ) : selectedCharacterIds.length > 0 ? (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <span>
+                ตัวละครที่เลือกยังไม่มี “รูปอ้างอิง” — ไปที่{' '}
+                <a href="/characters" className="font-semibold underline">หน้าตัวละคร</a>{' '}
+                อัปโหลดรูป ref ก่อน เพื่อให้แนบรูปอ้างอิงเวลาเอาพรอมต์ไปเจนได้ (คำบรรยายตัวละครถูกใส่ในพรอมต์ให้แล้ว)
+              </span>
+            </div>
+          ) : null}
 
           {drama.episodes.map((epi, epIndex) => (
             <div key={epi.ep} className="space-y-3">
@@ -623,12 +589,8 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
                       scene={scene}
                       aspectRatio={form.aspectRatio}
                       copyRefContext={copyRefContext}
-                      hasRefs={refImageList.length > 0}
                       media={media[key] ?? emptyMedia()}
                       onSceneChange={(patch) => patchScene(epIndex, sceneIdx, patch)}
-                      onMediaChange={(patch) => patchMedia(key, patch)}
-                      onGenerateImage={() => genImage(key, scene)}
-                      onGenerateVideo={() => genVideo(key, scene)}
                       onRegenImage={() => regenImagePrompt(key, epIndex, sceneIdx, scene)}
                       onRegenVideo={() => regenVideoPrompt(key, epIndex, sceneIdx, scene)}
                     />
