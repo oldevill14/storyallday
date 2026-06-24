@@ -39,7 +39,6 @@ const DEFAULT_BASE_URLS: Record<Provider, string> = {
   zai: 'https://api.z.ai/api/anthropic',
   gemini: 'https://generativelanguage.googleapis.com',
   openrouter: 'https://openrouter.ai/api/v1',
-  cli: 'local',
 };
 
 function json(data: unknown, status = 200) {
@@ -237,7 +236,6 @@ export async function POST(req: Request) {
     else if (provider === 'openai') models = await fetchOpenAI(base, apiKey);
     else if (provider === 'anthropic') models = await fetchAnthropic(base, apiKey);
     else if (provider === 'gemini') models = await fetchGemini(base, apiKey);
-    else if (provider === 'cli') models = []; // engines picked via chips, not here
     else models = fetchZaiCurated(); // zai
     return json(models);
   } catch (e) {

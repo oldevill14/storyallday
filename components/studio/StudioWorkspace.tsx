@@ -196,9 +196,8 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     setGenError(null);
     try {
       const title = form.title.trim();
-      // CLI providers (claude -p / codex exec / ollama) receive text only — the
-      // image is dropped in /api/ai — so never claim an image is attached.
-      const canVision = settings.provider !== 'cli';
+      // All providers go through /api/ai which forwards the image for vision.
+      const canVision = true;
       const kind = isSales
         ? 'คลิปขายของแนวตั้ง (ละครสั้นที่ปิดการขายอย่างเป็นธรรมชาติ)'
         : 'ละครสั้นแนวตั้ง';
