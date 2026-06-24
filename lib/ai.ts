@@ -87,7 +87,8 @@ export async function callAI(
       : userText;
     payload = {
       model,
-      max_tokens: 8192,
+      // 8192 ตัด JSON ที่ ~3×5 (continuity engine ทำ output ใหญ่); 16384 รองรับ ~5×5.
+      max_tokens: 16384,
       ...(system ? { system } : {}),
       messages: [{ role: 'user', content }],
     };
@@ -195,6 +196,15 @@ export function parseJSON<T = unknown>(raw: string): T {
   try {
     return JSON.parse(text) as T;
   } catch {
+    // Detect truncation: an object/array that never reached its closing bracket
+    // = the model hit its output-token limit mid-generation (too many ตอน/ฉาก).
+    const opens = (text.match(/[{[]/g) || []).length;
+    const closes = (text.match(/[}\]]/g) || []).length;
+    if (opens > closes) {
+      throw new Error(
+        'เนื้อหายาวเกินไปจน AI ตอบไม่จบ (JSON ถูกตัดกลางคัน) — ลดจำนวนตอน/ฉาก แล้วลองใหม่ หรือเลือกโมเดลที่รองรับ output ยาวขึ้น'
+      );
+    }
     throw new Error('AI ตอบกลับมาในรูปแบบที่อ่านไม่ได้ (JSON ไม่ถูกต้อง) ลองอีกครั้ง');
   }
 }
