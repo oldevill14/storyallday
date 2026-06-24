@@ -128,13 +128,17 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
     const cast = characters
       .filter((c) => selectedCharacterIds.includes(c.id))
       .map((c) => characterPromptBlock(c));
+    // Carry the generated drama's locked look into single-scene regeneration so a
+    // re-rolled prompt stays on-style with the rest of the series.
+    const styleBible = drama?.styleBible?.trim() || undefined;
     if (!isSales) {
-      return cast.length ? { cast } : undefined;
+      return cast.length || styleBible ? { cast, styleBible } : undefined;
     }
     return {
       productName: form.productName,
       productDetail: form.productDetail,
       cast,
+      styleBible,
       salesStyle: {
         label: SALES_STYLE_META[form.salesStyle].label,
         instruction: SALES_STYLE_META[form.salesStyle].instruction,
