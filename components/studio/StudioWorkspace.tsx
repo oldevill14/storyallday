@@ -17,8 +17,10 @@ import {
 import {
   BookOpen,
   Clapperboard,
+  Download,
   FileJson,
   FolderOpen,
+  Image as ImageIcon,
   Info,
   Save,
   Sparkles,
@@ -522,13 +524,51 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
             )}
           </Card>
 
-          <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-            <span>
-              การสร้างภาพ/วิดีโอใช้บัญชี <span className="font-medium text-slate-600">ai-flow</span>{' '}
-              (โปรไฟล์ Grok / ChatGPT บนเครื่องนี้) ซึ่งแยกจากบัญชีที่เข้าสู่ระบบแอป — กดสร้างทีละฉากเพื่อคุมการใช้งาน
-            </span>
-          </div>
+          {/* ภาพอ้างอิงตัวละคร/สินค้าที่เลือก — แนบตามลำดับนี้ตอนเอาพรอมต์ไปเจนเองที่ Grok/ChatGPT */}
+          {refEntities.some((e) => e.img) ? (
+            <div className="rounded-xl border border-violet-200 bg-violet-50/50 p-4">
+              <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+                <ImageIcon className="h-4 w-4 text-violet-600" />
+                ภาพอ้างอิง — แนบตามลำดับนี้ตอนเอาพรอมต์ไปเจน (Grok / ChatGPT) เพื่อให้หน้าตัวละคร/สินค้าตรงทุกฉาก
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {refEntities
+                  .filter((e) => e.img)
+                  .map((e, i) => (
+                    <div key={`${e.kind}-${i}`} className="flex w-24 flex-col items-center gap-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={e.img}
+                        alt={e.name}
+                        className="h-24 w-24 rounded-lg object-cover ring-1 ring-violet-200"
+                      />
+                      <span className="w-full truncate text-center text-[11px] font-medium text-slate-600">
+                        image {i + 1} · {e.name}
+                      </span>
+                      <a
+                        href={e.img}
+                        download={`ref-${i + 1}-${e.name}.png`}
+                        className="inline-flex items-center gap-0.5 text-[11px] text-violet-600 hover:underline"
+                      >
+                        <Download className="h-3 w-3" /> เซฟรูป
+                      </a>
+                    </div>
+                  ))}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-500">
+                พรอมต์ที่กด “คัดลอก” มีคำอธิบาย + ลำดับภาพให้แล้ว — แค่แนบรูปเหล่านี้ตามลำดับ (image 1, 2, …) ตอนวางพรอมต์
+              </p>
+            </div>
+          ) : selectedCharacterIds.length > 0 ? (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+              <span>
+                ตัวละครที่เลือกยังไม่มี “รูปอ้างอิง” — ไปที่{' '}
+                <a href="/characters" className="font-semibold underline">หน้าตัวละคร</a>{' '}
+                อัปโหลดรูป ref ก่อน เพื่อให้แนบรูปอ้างอิงเวลาเอาพรอมต์ไปเจนได้ (คำบรรยายตัวละครถูกใส่ในพรอมต์ให้แล้ว)
+              </span>
+            </div>
+          ) : null}
 
           {drama.episodes.map((epi, epIndex) => (
             <div key={epi.ep} className="space-y-3">
