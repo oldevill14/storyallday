@@ -90,9 +90,7 @@ export default function SettingsPage() {
     setDraft((d) => ({
       ...d,
       provider,
-      // CLI uses a local subscription — no key needed; a sentinel keeps the rest
-      // of the app's "hasKey" gating happy.
-      apiKey: saved?.apiKey || (provider === 'cli' ? 'local' : ''),
+      apiKey: saved?.apiKey || '',
       model: saved?.model ?? defaultModelFor(provider),
       baseUrl: saved?.baseUrl ?? '',
     }));
@@ -130,7 +128,7 @@ export default function SettingsPage() {
   };
 
   const onTest = async () => {
-    if (draft.provider !== 'cli' && !draft.apiKey.trim()) {
+    if (!draft.apiKey.trim()) {
       setTest({ status: 'error', message: 'กรุณากรอก API Key ก่อนทดสอบการเชื่อมต่อ' });
       return;
     }
@@ -265,22 +263,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-5">
-          {/* API Key — or a CLI note for the local subscription provider */}
-          {draft.provider === 'cli' ? (
-            <div className="flex items-start gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
-              <p className="text-sm leading-relaxed text-emerald-900">
-                <span className="font-semibold">ไม่ต้องใช้ API Key</span> — ใช้บัญชี subscription
-                ที่ล็อกอินไว้ใน CLI บนเครื่องนี้ (<code className="font-mono">claude</code> = Claude
-                Pro/Max · <code className="font-mono">codex</code> = ChatGPT · ollama = โลคัล) ช่วย
-                ประหยัดค่า API แบบ per-token
-                <br />
-                <span className="text-emerald-700">
-                  ใช้ได้เฉพาะตอนรันแอปแบบ local-server บนเครื่องที่ติดตั้ง + ล็อกอิน CLI แล้ว
-                </span>
-              </p>
-            </div>
-          ) : (
+          {/* API Key */}
           <div>
             <label htmlFor="apiKey" className="mb-1.5 flex items-center gap-1.5 text-sm font-medium text-slate-700">
               <Lock className="h-3.5 w-3.5 text-slate-400" />
@@ -318,7 +301,6 @@ export default function SettingsPage() {
               </a>
             </p>
           </div>
-          )}
 
           {/* Sync keys to the account (Firestore) — opt-in, default OFF */}
           <label className="flex cursor-pointer items-start gap-2.5 rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
@@ -351,45 +333,20 @@ export default function SettingsPage() {
               </Badge>
             </label>
             <p className="mb-2 text-xs text-slate-500">
-              {draft.provider === 'cli'
-                ? 'เลือก engine: claude (Claude subscription) · codex (ChatGPT subscription) · ollama:<model> (โลคัล/ฟรี)'
-                : modelsEnabled
+              {modelsEnabled
                 ? 'เลือกจากโมเดลที่ใช้ได้จริงของผู้ให้บริการนี้ — แสดงราคาต่อ 1 ล้าน tokens (ถ้ามี)'
                 : 'รายการโมเดลจะดึงให้อัตโนมัติเมื่อ “ทดสอบการเชื่อมต่อ” สำเร็จ'}
             </p>
 
-            {draft.provider === 'cli' ? (
-              <div className="flex flex-wrap gap-1.5">
-                {meta.models.map((m) => {
-                  const active = draft.model === m;
-                  return (
-                    <button
-                      key={m}
-                      type="button"
-                      onClick={() => patch({ model: m })}
-                      className={
-                        'rounded-full px-3 py-1.5 text-sm font-medium transition-colors ' +
-                        (active
-                          ? 'bg-violet-600 text-white shadow-sm'
-                          : 'bg-slate-100 text-slate-600 hover:bg-violet-50 hover:text-violet-700')
-                      }
-                    >
-                      {m}
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <ModelPicker
-                provider={draft.provider}
-                apiKey={draft.apiKey.trim()}
-                baseUrl={draft.baseUrl?.trim() || undefined}
-                value={draft.model}
-                onChange={(id) => patch({ model: id })}
-                enabled={modelsEnabled}
-                reloadToken={reloadToken}
-              />
-            )}
+            <ModelPicker
+              provider={draft.provider}
+              apiKey={draft.apiKey.trim()}
+              baseUrl={draft.baseUrl?.trim() || undefined}
+              value={draft.model}
+              onChange={(id) => patch({ model: id })}
+              enabled={modelsEnabled}
+              reloadToken={reloadToken}
+            />
 
             {/* Manual override / offline fallback */}
             <div className="mt-3">

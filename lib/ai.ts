@@ -44,11 +44,6 @@ export async function callAI(
   const userText = opts.prompt;
   const img = opts.image ? parseDataUrl(opts.image) : null;
 
-  if (provider === 'cli') {
-    throw new Error(
-      'โหมด CLI (subscription) ใช้ได้เฉพาะตอนรันบนเครื่อง — บนเว็บนี้ให้เลือก provider (Gemini / OpenRouter / z.ai / Anthropic) แล้วใส่ API Key ของบัญชีคุณในหน้าตั้งค่า',
-    );
-  }
   if (!apiKey) {
     throw new Error('ยังไม่ได้ใส่ API Key — ไปที่หน้าตั้งค่าเพื่อกรอกคีย์ของบัญชีคุณก่อน');
   }

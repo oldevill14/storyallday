@@ -2,7 +2,7 @@
 // This file is the source of truth for all data shapes used across the app.
 
 /** AI provider the proxy can call. `cli` runs a local subscription CLI. */
-export type Provider = 'openai' | 'anthropic' | 'gemini' | 'zai' | 'openrouter' | 'cli';
+export type Provider = 'openai' | 'anthropic' | 'gemini' | 'zai' | 'openrouter';
 
 // --- Membership / access control --------------------------------------------
 
@@ -82,7 +82,6 @@ export const DEFAULT_MODEL: Record<Provider, string> = {
   gemini: 'gemini-2.0-flash',
   zai: 'glm-4.6',
   openrouter: 'cohere/north-mini-code:free',
-  cli: 'claude',
 };
 
 /** Every provider id, in display order. */
@@ -92,7 +91,6 @@ export const ALL_PROVIDERS: Provider[] = [
   'gemini',
   'zai',
   'openrouter',
-  'cli',
 ];
 
 /** The page owner's brand profile — feeds prompts. */
