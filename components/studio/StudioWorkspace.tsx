@@ -401,7 +401,11 @@ export function StudioWorkspace({ mode }: { mode: StudioMode }) {
   // ready to hand to Grok to generate clips (image-to-video per scene, joined).
   const onDownloadJson = () => {
     if (!drama) return;
-    const storyboard = buildGrokStoryboard(drama, form, isSales, copyRefContext);
+    // ฝังรูปอ้างอิงจริง (data URL) ของตัวละคร/สินค้าที่เลือก เรียงตามลำดับ ลงใน JSON
+    const refImages = refEntities
+      .filter((e) => e.img)
+      .map((e, i) => ({ order: i + 1, kind: e.kind, name: e.name, image: e.img as string }));
+    const storyboard = buildGrokStoryboard(drama, form, isSales, copyRefContext, refImages);
     const safe =
       (drama.title || 'storyboard')
         .replace(/[^\w฀-๿]+/g, '_')
