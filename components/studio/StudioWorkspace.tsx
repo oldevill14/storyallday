@@ -67,7 +67,7 @@ export type StudioMode = 'drama' | 'sales';
 const DEFAULT_FORM: StudioForm = {
   title: '',
   topic: '',
-  episodeCount: 3,
+  episodeCount: 1,
   scenesPerEpisode: 3,
   style: 'Photorealistic',
   aspectRatio: '9:16',
