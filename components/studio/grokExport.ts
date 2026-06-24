@@ -9,16 +9,27 @@ import {
   type StudioForm,
 } from './types';
 
+/** A selected reference image embedded into the storyboard (data URL + which entity). */
+export type RefImage = {
+  order: number;
+  kind: 'character' | 'product';
+  name: string;
+  /** data:image/...;base64 — the actual selected reference image. */
+  image: string;
+};
+
 /**
  * Build a Grok-agent-ready storyboard object from a generated drama + the form.
- * `refContext` = a reference block describing the selected character(s)/product
- * (kept in continuity so every scene references the same cast/refs).
+ * `refContext` = a text reference block describing the selected character(s)/product.
+ * `refImages` = the ACTUAL selected reference images (data URLs, in attach order) so
+ * the storyboard is self-contained — the agent has the real images, not just text.
  */
 export function buildGrokStoryboard(
   drama: Drama,
   form: StudioForm,
   isSales: boolean,
   refContext?: string,
+  refImages?: RefImage[],
 ) {
   const scenes: Array<Record<string, unknown>> = [];
   let order = 0;
@@ -77,6 +88,8 @@ export function buildGrokStoryboard(
         drama.styleBible ? ' and the locked style_bible look' : ''
       } and every character's identity, face and outfit identical across all scenes. The story is ONE continuous timeline — each scene continues from the previous one (see each scene's "continuity" note). The Thai spoken line is embedded in each video_prompt in quotes.`,
       ...(refContext && refContext.trim() ? { reference: refContext.trim() } : {}),
+      // รูปอ้างอิงจริง (data URL) ของตัวละคร/สินค้าที่เลือก เรียงตามลำดับ image 1,2,…
+      ...(refImages && refImages.length ? { reference_images: refImages } : {}),
     },
     scenes,
     assembly: {
